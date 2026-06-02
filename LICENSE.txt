@@ -1,0 +1,30 @@
+TRIDENT TD — Tous droits réservés
+Copyright © 2026 BASTOS9100. Tous droits réservés. / All rights reserved.
+
+L'œuvre originale de ce dépôt (code source, conception et design du jeu,
+mécaniques, intégration et assemblage) est la propriété exclusive de l'auteur.
+
+Sans autorisation ÉCRITE préalable de l'auteur, il est INTERDIT de :
+  - vendre, commercialiser ou monétiser ce jeu, en tout ou en partie ;
+  - redistribuer, republier ou héberger ce code sous votre propre nom ;
+  - créer ou distribuer des œuvres dérivées à des fins commerciales.
+
+La consultation du code à des fins strictement personnelles ou éducatives
+est tolérée. Aucun autre droit n'est accordé.
+
+----------------------------------------------------------------------
+RESSOURCES TIERS (non couvertes par la présente licence)
+
+Ce projet intègre des ressources de tiers, régies par LEURS propres licences :
+  - Modèles & décors KayKit (Kay Lousberg) ............ CC0 / domaine public
+  - Textures & HDRI Poly Haven ....................... CC0 / domaine public
+  - Musique « Laments of the War » (OpenGameArt) ..... CC0 / domaine public
+  - Sons de mort « grunts of male death and pain » ... CC0 / domaine public
+  - Modèles de personnages Mixamo (Adobe) ............ conditions Adobe Mixamo
+
+Ces ressources demeurent soumises à leurs licences d'origine. La présente
+licence « tous droits réservés » s'applique uniquement à l'œuvre originale
+de l'auteur (code, conception, intégration), et non aux ressources CC0/tiers.
+----------------------------------------------------------------------
+
+LE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE.
