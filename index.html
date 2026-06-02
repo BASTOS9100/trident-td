@@ -641,27 +641,28 @@ function initScene(){
   renderer.setPixelRatio(PR); renderer.setSize(W,H);
   renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
-  renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.16;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.2;
   scene=new THREE.Scene();
-  scene.fog=new THREE.FogExp2('#5a5142', 0.006);
+  scene.fog=new THREE.FogExp2('#2a2620', 0.0066);   // brume crépusculaire (allégée pour garder l'aire de jeu lisible)
   camera=new THREE.PerspectiveCamera(46, W/H, 0.1, 400);
   // environnement HDRI réel (Poly Haven, CC0) : éclairage image-based + ciel + reflets
   const pmrem=new THREE.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
   try{ scene.environment=pmrem.fromScene(new THREE.RoomEnvironment(),0.04).texture; }catch(e){}
-  scene.background=new THREE.Color('#9fb6cf');
+  scene.background=new THREE.Color('#24223a'); buildSky();
   if(THREE.RGBELoader){ new THREE.RGBELoader(LOADER_MGR||undefined).load('models/env/sky.hdr', hdr=>{
     hdr.mapping=THREE.EquirectangularReflectionMapping; const env=pmrem.fromEquirectangular(hdr).texture;
-    scene.environment=env; scene.background=hdr; if(sun) sun.intensity=2.2;
+    scene.environment=env; if(sun) sun.intensity=2.9;   // HDRI pour les reflets/IBL ; fond géré par un ciel crépusculaire (skydome)
   }, undefined, ()=>{}); }
-  // lumières (le HDRI fournit l'ambiance ; le soleil donne des ombres nettes)
-  scene.add(new THREE.HemisphereLight('#bcd2ff','#4a4228',0.42));
-  sun=new THREE.DirectionalLight('#ffe2b4',2.25); sun.position.set(-26,46,-10); sun.castShadow=true;
+  // lumières — crépuscule dramatique : faible ambiance + soleil rasant doré chaud
+  scene.add(new THREE.HemisphereLight('#8a98c0','#3a3020',0.46));
+  sun=new THREE.DirectionalLight('#ffb260',3.0); sun.position.set(-34,30,-18); sun.castShadow=true;   // soleil bas, lumière dorée rasante
+  const fill=new THREE.DirectionalLight('#9fb0e0',0.5); fill.position.set(20,30,28); scene.add(fill);   // fill froid doux (lisibilité des unités)
   sun.shadow.mapSize.set(4096,4096); sun.shadow.camera.near=10; sun.shadow.camera.far=180;
   sun.shadow.camera.left=-44; sun.shadow.camera.right=44; sun.shadow.camera.top=44; sun.shadow.camera.bottom=-44; sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.02;
   scene.add(sun); scene.add(sun.target); sun.target.position.set(COLS/2,0,ROWS/2);
   const rim=new THREE.DirectionalLight('#5a78ff',0.5); rim.position.set(24,18,30); scene.add(rim);
   raycaster=new THREE.Raycaster(); groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0), -TOP);
-  preloadModels(); loadEnv(); buildWorld(); buildBoard(); buildParticles(); buildGrass();
+  preloadModels(); loadEnv(); buildWorld(); buildBoard(); buildParticles(); buildGrass(); buildAtmosphereFX();
   hoverMesh=new THREE.Mesh(new THREE.BoxGeometry(0.98,0.1,0.98), new THREE.MeshBasicMaterial({color:'#7af06a',transparent:true,opacity:0.45}));
   hoverMesh.position.y=TOP+0.06; hoverMesh.visible=false; scene.add(hoverMesh);
   const rg=new THREE.RingGeometry(0.97,1,56); rg.rotateX(-Math.PI/2);
@@ -689,6 +690,22 @@ function onResize(){ if(!renderer||!camera) return; const W=window.innerWidth, H
   renderer.setSize(W,H); camera.aspect=W/H; camera.updateProjectionMatrix();
   if(composer) composer.setSize(W,H);
   if(_fxaa) _fxaa.material.uniforms['resolution'].value.set(1/(W*PR),1/(H*PR)); }
+function buildSky(){ // ciel crépusculaire dégradé (dôme)
+  const mat=new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, fog:false,
+    uniforms:{ top:{value:new THREE.Color('#161b30')}, mid:{value:new THREE.Color('#3b3354')}, bot:{value:new THREE.Color('#8a4a22')} },
+    vertexShader:'varying vec3 vp; void main(){ vp=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader:'varying vec3 vp; uniform vec3 top,mid,bot; void main(){ float h=normalize(vp).y; vec3 c=(h>0.0)?mix(mid,top,clamp(h*1.5,0.0,1.0)):mix(mid,bot,clamp(-h*3.5,0.0,1.0)); gl_FragColor=vec4(c,1.0); }' });
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(240,32,18), mat); sky.position.set(COLS/2,0,ROWS/2); sky.frustumCulled=false; scene.add(sky); }
+let MIST=[], EMBERS=null;
+function _softSprite(){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'); const g=x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(0.6,'rgba(255,255,255,0.5)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g; x.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); }
+function buildAtmosphereFX(){ const spr=_softSprite();
+  // bancs de brume au sol qui dérivent
+  for(let i=0;i<16;i++){ const m=new THREE.Mesh(new THREE.PlaneGeometry(20,20), new THREE.MeshBasicMaterial({map:spr,transparent:true,opacity:0.14,depthWrite:false,color:new THREE.Color('#6b7088')}));
+    m.rotation.x=-Math.PI/2; m.position.set(COLS/2+(srnd()-0.5)*125, 0.55+srnd()*0.9, ROWS/2+(srnd()-0.5)*115); m.renderOrder=2; m.userData={vx:(srnd()-0.5)*0.25,vz:(srnd()-0.5)*0.25,ph:srnd()*6}; scene.add(m); MIST.push(m); }
+  // braises chaudes en suspension qui montent
+  const N=200, pos=new Float32Array(N*3), vel=new Float32Array(N); for(let i=0;i<N;i++){ pos[i*3]=COLS/2+(srnd()-0.5)*105; pos[i*3+1]=srnd()*15; pos[i*3+2]=ROWS/2+(srnd()-0.5)*95; vel[i]=0.25+srnd()*0.55; }
+  const eg=new THREE.BufferGeometry(); eg.setAttribute('position',new THREE.BufferAttribute(pos,3)); eg.userData={vel};
+  EMBERS=new THREE.Points(eg, new THREE.PointsMaterial({map:spr,color:new THREE.Color('#ff9436'),size:0.24,transparent:true,opacity:0.75,depthWrite:false,blending:THREE.AdditiveBlending})); EMBERS.frustumCulled=false; scene.add(EMBERS); }
 function buildWorld(){
   // grand terrain herbeux environnant
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(260,260), grassPBR(42));
@@ -1261,6 +1278,8 @@ function render3D(){
     f.el.style.left=((_v.x*0.5+0.5)*W)+'px'; f.el.style.top=((-_v.y*0.5+0.5)*H)+'px'; f.el.style.opacity=Math.min(1,f.t*1.6); }
   // lucioles / poussière
   if(FIREFLIES){ FIREFLIES.position.y=0.6+Math.sin(t*0.6)*0.2; FIREFLIES.rotation.y=t*0.04; FIREFLIES.material.opacity=0.5+0.3*Math.sin(t*1.7); }
+  for(const m of MIST){ m.position.x+=m.userData.vx*rdt; m.position.z+=m.userData.vz*rdt; m.rotation.z+=0.03*rdt; m.material.opacity=0.11+0.05*Math.sin(t*0.3+m.userData.ph); }
+  if(EMBERS){ const p=EMBERS.geometry.attributes.position, v=EMBERS.geometry.userData.vel; for(let i=0;i<p.count;i++){ let y=p.array[i*3+1]+v[i]*rdt; if(y>15) y=0; p.array[i*3+1]=y; } p.needsUpdate=true; EMBERS.material.opacity=0.6+0.2*Math.sin(t*2); }
   if(WATER_N){ WATER_N.offset.x=t*0.025; WATER_N.offset.y=t*0.018; }
   for(const b of BRAZIERS){ const f=0.72+0.28*Math.sin(t*9+b.ph)+0.12*Math.sin(t*17+b.ph*1.7); b.pl.intensity=1.4*f; const s=0.85+0.3*f; b.fire.scale.set(1,s,1); b.fire.rotation.y=t*2+b.ph; }
   GRASS_U.uTime.value=t;
