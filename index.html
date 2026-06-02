@@ -674,11 +674,11 @@ function initScene(){
     try{ const ssao=new THREE.SSAOPass(scene,camera,W,H); ssao.kernelRadius=12; ssao.minDistance=0.004; ssao.maxDistance=0.09;
       composer.addPass(ssao); rendered=true; }catch(e){}
     if(!rendered) composer.addPass(new THREE.RenderPass(scene,camera));
-    const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W,H), 0.7, 0.5, 0.82); composer.addPass(bloom);
+    const bloom=new THREE.UnrealBloomPass(new THREE.Vector2(W,H), 0.85, 0.55, 0.8); composer.addPass(bloom);
     const fxaa=new THREE.ShaderPass(THREE.FXAAShader); fxaa.material.uniforms['resolution'].value.set(1/(W*PR),1/(H*PR)); composer.addPass(fxaa); _fxaa=fxaa;
-    const Grade={ uniforms:{tDiffuse:{value:null}, sat:{value:1.26}, con:{value:1.14}, vig:{value:1.0}},
+    const Grade={ uniforms:{tDiffuse:{value:null}, sat:{value:1.32}, con:{value:1.16}, vig:{value:1.0}},
       vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-      fragmentShader:'varying vec2 vUv; uniform sampler2D tDiffuse; uniform float sat,con,vig; void main(){ vec4 c=texture2D(tDiffuse,vUv); vec3 col=c.rgb; float l=dot(col,vec3(0.299,0.587,0.114)); col=mix(vec3(l),col,sat); col=(col-0.5)*con+0.5; col*=vec3(1.07,1.0,0.9); float d=distance(vUv,vec2(0.5)); col*=smoothstep(0.95,0.36,d*vig); gl_FragColor=vec4(max(col,0.0),c.a); }' };
+      fragmentShader:'varying vec2 vUv; uniform sampler2D tDiffuse; uniform float sat,con,vig; void main(){ vec4 c=texture2D(tDiffuse,vUv); vec3 col=c.rgb; float l=dot(col,vec3(0.299,0.587,0.114)); col=mix(vec3(l),col,sat); col=(col-0.5)*con+0.5; float lum=clamp(dot(col,vec3(0.299,0.587,0.114)),0.0,1.0); vec3 shadowT=vec3(0.84,0.96,1.14); vec3 highT=vec3(1.13,1.04,0.85); col*=mix(shadowT,highT,lum); float d=distance(vUv,vec2(0.5)); col*=smoothstep(1.04,0.30,d*vig); gl_FragColor=vec4(max(col,0.0),c.a); }' };
     const grade=new THREE.ShaderPass(Grade); composer.addPass(grade);
   }catch(e){ composer=null; }
   initCamera(W,H);
@@ -746,12 +746,26 @@ function buildBoard(){
           box(srand()<0.5?'grass0':'grass1',UCONE,srand()<0.5?leafA:leafB, bx+(srand()-0.5)*0.24,0.42,bz+(srand()-0.5)*0.24, rad,ht,rad, (srand()-0.5)*0.3,srand()*6,(srand()-0.5)*0.3); } } }); }
   for(const n in _ibk){ const b=_ibk[n]; const im=new THREE.InstancedMesh(b.geo,b.mat,b.M.length); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false;
     for(let i=0;i<b.M.length;i++) im.setMatrixAt(i,b.M[i]); im.instanceMatrix.needsUpdate=true; scene.add(im); }
-  // portails (3 pointes + 2 extrémités de la barre)
-  for(const s of ALL_SPAWNS){ const g=new THREE.Group(); g.position.set(s.c+0.5,TOP+0.03,s.r+0.5);
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.52,0.1,12,32), MAT('#ff7a2a',{emissive:'#ff4a08',ei:2.4,rough:0.35,metal:0.3})); ring.rotation.x=-Math.PI/2; g.add(ring);
-    const glow=new THREE.Mesh(new THREE.CircleGeometry(0.46,28), new THREE.MeshBasicMaterial({color:'#ff8030',transparent:true,opacity:0.55})); glow.rotation.x=-Math.PI/2; glow.position.y=0.01; g.add(glow);
-    const pl=new THREE.PointLight('#ff5a20',1.4,5); pl.position.y=0.4; g.add(pl);
-    g.userData.ring=ring; scene.add(g); SPAWN_OBJ.push(g); }
+  // PORTAILS arcaniques (vortex) — d'où surgit la horde
+  const ADDB=THREE.AdditiveBlending;
+  for(const s of ALL_SPAWNS){ const g=new THREE.Group(); g.position.set(s.c+0.5,TOP+0.02,s.r+0.5);
+    // socle de pierre sombre gravé
+    const base=new THREE.Mesh(new THREE.TorusGeometry(0.6,0.13,10,30), MAT('#2b2731',{rough:0.7,metal:0.3})); base.rotation.x=-Math.PI/2; base.position.y=0.03; base.castShadow=true; g.add(base);
+    // piliers runiques autour
+    for(let i=0;i<6;i++){ const a=i/6*6.2832; const p=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.52,0.11), MAT('#34303c',{rough:0.6})); p.position.set(Math.cos(a)*0.62,0.24,Math.sin(a)*0.62); p.castShadow=true; g.add(p);
+      const rune=new THREE.Mesh(new THREE.OctahedronGeometry(0.06,0), MAT('#8fe6ff',{emissive:'#8fe6ff',ei:3.0})); rune.position.set(Math.cos(a)*0.62,0.52,Math.sin(a)*0.62); g.add(rune); }
+    // vortex : disque additif + 2 anneaux spiralés
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(0.52,40), new THREE.MeshBasicMaterial({color:'#23c8ff',transparent:true,opacity:0.5,blending:ADDB,depthWrite:false,side:THREE.DoubleSide})); disc.rotation.x=-Math.PI/2; disc.position.y=0.06; g.add(disc);
+    const ring1=new THREE.Mesh(new THREE.TorusGeometry(0.4,0.03,8,40), new THREE.MeshBasicMaterial({color:'#9af0ff',transparent:true,opacity:0.9,blending:ADDB,depthWrite:false})); ring1.rotation.x=-Math.PI/2; ring1.position.y=0.1; g.add(ring1);
+    const ring2=new THREE.Mesh(new THREE.TorusGeometry(0.25,0.025,8,32), new THREE.MeshBasicMaterial({color:'#e6fbff',transparent:true,opacity:0.95,blending:ADDB,depthWrite:false})); ring2.rotation.x=-Math.PI/2; ring2.position.y=0.14; g.add(ring2);
+    // colonne d'énergie montante
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.48,1.2,20,1,true), new THREE.MeshBasicMaterial({color:'#23c8ff',transparent:true,opacity:0.12,blending:ADDB,depthWrite:false,side:THREE.DoubleSide})); col.position.y=0.66; g.add(col);
+    // étincelles d'âmes montantes
+    const N=28, pp=new Float32Array(N*3); for(let i=0;i<N;i++){ const a=Math.random()*6.28, rr=Math.random()*0.42; pp[i*3]=Math.cos(a)*rr; pp[i*3+1]=Math.random()*1.3; pp[i*3+2]=Math.sin(a)*rr; }
+    const pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.BufferAttribute(pp,3));
+    const pts=new THREE.Points(pg, new THREE.PointsMaterial({color:'#bdf2ff',size:0.085,transparent:true,opacity:0.9,depthWrite:false,blending:ADDB})); g.add(pts);
+    const pl=new THREE.PointLight('#39b6ff',1.7,6.5); pl.position.y=0.5; g.add(pl);
+    g.userData={disc,ring1,ring2,pts,pl,ph0:Math.random()*6}; scene.add(g); SPAWN_OBJ.push(g); }
   buildAtmosphere();
   buildCastle();
 }
@@ -1188,7 +1202,11 @@ function render3D(){
   if(!renderer) return; const t=T();
   const _now=performance.now(); const rdt=Math.min(0.05,(_now-(render3D._last||_now))/1000); render3D._last=_now;
   panCamera(rdt); updateCamera();
-  for(const g of SPAWN_OBJ) g.userData.ring.rotation.z=t*0.9;
+  for(const g of SPAWN_OBJ){ const u=g.userData; const tt=t+(u.ph0||0);
+    u.disc.rotation.z=tt*0.7; u.disc.material.opacity=0.42+0.16*Math.sin(tt*3);
+    u.ring1.rotation.z=-tt*1.5; u.ring2.rotation.z=tt*2.3;
+    if(u.pl) u.pl.intensity=1.4+0.5*Math.sin(tt*4);
+    const pos=u.pts.geometry.attributes.position; for(let i=0;i<pos.count;i++){ let y=pos.array[i*3+1]+0.013; if(y>1.35) y=0; pos.array[i*3+1]=y; } pos.needsUpdate=true; }
   if(WATER) WATER.material.opacity=0.82+Math.sin(t*1.3)*0.04;
   if(DUST){ DUST.rotation.y=t*0.02; DUST.position.y=Math.sin(t*0.3)*0.3; }
   const W=renderer.domElement.clientWidth, H=renderer.domElement.clientHeight;
