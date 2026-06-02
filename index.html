@@ -283,11 +283,11 @@ function waveSpec(w){
   const fly=type==='boss'?(w===40):cfg.fly;
   // difficulté nettement supérieure ET croissante : PV exponentiels, armure + effectifs + vitesse qui montent avec la vague
   const isB=(type==='boss');
-  const hp=Math.round(50*Math.pow(1.245,w-1)*cfg.mult*(isB?1:1.7));     // difficulté remontée
-  const armor=Math.round(cfg.armorK*(9+w*2.2) + (isB?w*0.8:w*1.5));
-  const speed=Math.round(cfg.speed*(1+w*0.008));
-  const count=isB?1:Math.round(cfg.count*(1+w*0.20));
-  const gpk=Math.floor((5+w*2.4)*(type==='boss'?16:1));                 // or adapté à l'éco partagée
+  const hp=Math.round(50*Math.pow(1.252,w-1)*cfg.mult*(isB?1:1.7));     // PV qui montent un peu plus fort
+  const armor=Math.round(cfg.armorK*(9+w*2.4) + (isB?w*0.9:w*1.7));
+  const speed=Math.round(cfg.speed*(1+w*0.009));
+  const count=isB?1:Math.round(cfg.count*(1+w*0.23));
+  const gpk=Math.floor((4+w*1.5)*(type==='boss'?12:1));                 // or réduit → moins de richesse, partie + tendue
   return {type,hp,armor,speed,col:cfg.col,r:cfg.r,fly,shape:cfg.shape,count,gold:gpk,leak:(type==='boss'?15:1)};
 }
 function startWave(){
@@ -393,12 +393,12 @@ function update(dt){
   for(let i=projectiles.length-1;i>=0;i--) if(projectiles[i].done){ remove3D(projectiles[i].obj); projectiles.splice(i,1); }
   for(let i=fx.length-1;i>=0;i--){ fx[i].t-=dt; if(fx[i].t<=0){ remove3D(fx[i].obj); fx.splice(i,1); } }
   for(let i=creeps.length-1;i>=0;i--) if(creeps[i].dead){ remove3D(creeps[i].obj); if(creeps[i].bar) creeps[i].bar.remove(); creeps.splice(i,1); }
-  if(waveActive&&!spawnQueue.length&&!creeps.length){ waveActive=false; const bonus=15+waveIndex*2; for(let i=0;i<4;i++) golds[i]+=bonus; score+=bonus;
+  if(waveActive&&!spawnQueue.length&&!creeps.length){ waveActive=false; const bonus=10+waveIndex; for(let i=0;i<4;i++) golds[i]+=bonus; score+=bonus;
     flashMsg('Vague nettoyée ! +'+bonus+' or (chacun)'); if(waveIndex>=40) endGame(true); }
   refreshUI();
 }
 function hit(c,dmg,poison,by){ c.hp-=Math.max(1,dmg-(c.armor||0)); c.hitFlash=0.09; if(poison) c.poison={dps:poison.dps,t:poison.dur,slow:poison.slow,player:by}; if(c.hp<=0) killCreep(c,by); }
-function killCreep(c,by){ if(c.dead) return; c.dead=true; if(by!=null&&by>=0&&golds[by]!=null){ golds[by]+=c.gold; kills[by]=(kills[by]||0)+1; } score+=c.gold; fx.push(make3DBoom(c.x,c.y,c.r,c.col,true)); floatGold(c.x,c.y-c.r,c.gold,by); if(typeof AUDIO!=='undefined') AUDIO.coin(); netEv({k:'d',x:Math.round(c.x),y:Math.round(c.y),r:c.r,col:c.col}); }
+function killCreep(c,by){ if(c.dead) return; c.dead=true; if(by!=null&&by>=0&&golds[by]!=null){ golds[by]+=c.gold; kills[by]=(kills[by]||0)+1; } score+=c.gold; fx.push(make3DBoom(c.x,c.y,c.r,c.col,true)); floatGold(c.x,c.y-c.r,c.gold,by); if(typeof AUDIO!=='undefined') AUDIO.death(); netEv({k:'d',x:Math.round(c.x),y:Math.round(c.y),r:c.r,col:c.col}); }
 const floats=[];
 function floatGold(px,py,amt,by){ const el=document.createElement('div'); el.textContent='+'+amt;
   const col=(by!=null&&PLAYERS[by])?PLAYERS[by].color:'#ffdf5a';
@@ -1271,14 +1271,29 @@ const AUDIO={ ctx:null, master:null, musicGain:null, on:true, _lc:0,
     this.musicGain=this.ctx.createGain(); this.musicGain.gain.value=0.2; this.musicGain.connect(this.master); this.startMusic(); },
   resume(){ if(this.ctx&&this.ctx.state==='suspended') this.ctx.resume(); },
   toggle(){ this.on=!this.on; if(this.master) this.master.gain.setTargetAtTime(this.on?0.5:0,this.ctx.currentTime,0.05); return this.on; },
-  startMusic(){ const ctx=this.ctx, root=110; // La2
-    const chords=[[0,7,16],[-2,5,12],[3,10,19],[-4,3,15]]; // progression douce
-    const voices=[0,1,2].map(()=>{ const o=ctx.createOscillator(); o.type='sine'; const g=ctx.createGain(); g.gain.value=0;
-      const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1100; o.connect(g); g.connect(f); f.connect(this.musicGain); o.start(); return {o,g}; });
-    let ci=0; const step=()=>{ if(!this.ctx) return; const ch=chords[ci%chords.length], t=ctx.currentTime;
-      voices.forEach((v,i)=>{ const fr=root*Math.pow(2,ch[i]/12); v.o.frequency.setTargetAtTime(fr,t,0.7); v.g.gain.setTargetAtTime(0.16,t,1.4); });
-      this.bell(root*Math.pow(2,(ch[2]+12)/12), t+0.3); if(ci%2===1) this.bell(root*Math.pow(2,(ch[1]+19)/12), t+2.1); ci++; };
-    step(); this._mt=setInterval(step,4600); },
+  startMusic(){ const ctx=this.ctx, root=55; // La1 (basse profonde)
+    // progression mineure épique : Am – F – C – G  (demi-tons depuis La)
+    const prog=[{b:0,ch:[0,7,12,16]},{b:-4,ch:[-4,3,8,12]},{b:3,ch:[3,10,15,19]},{b:-2,ch:[-2,5,10,14]}];
+    // pad "cordes" (sawtooth filtré)
+    const pad=[0,1,2,3].map(()=>{ const o=ctx.createOscillator(); o.type='sawtooth'; const g=ctx.createGain(); g.gain.value=0;
+      const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1300; o.connect(g); g.connect(f); f.connect(this.musicGain); o.start(); return {o,g}; });
+    // basse
+    const bo=ctx.createOscillator(); bo.type='sawtooth'; const bg=ctx.createGain(); bg.gain.value=0;
+    const bf=ctx.createBiquadFilter(); bf.type='lowpass'; bf.frequency.value=320; bo.connect(bg); bg.connect(bf); bf.connect(this.musicGain); bo.start();
+    let ci=0; const step=()=>{ if(!this.ctx) return; const p=prog[ci%prog.length], t=ctx.currentTime;
+      bo.frequency.setTargetAtTime(root*Math.pow(2,p.b/12), t, 0.12); bg.gain.setTargetAtTime(0.26, t, 0.4);
+      pad.forEach((v,i)=>{ v.o.frequency.setTargetAtTime(root*4*Math.pow(2,p.ch[i%p.ch.length]/12), t, 0.5); v.g.gain.setTargetAtTime(0.06, t, 0.9); });
+      this.bell(root*8*Math.pow(2,p.ch[2]/12), t+0.2);
+      if(ci%2===1) this.bell(root*8*Math.pow(2,(p.ch[3]+12)/12), t+1.7);
+      this.thump(t); this.thump(t+1.5);                 // pulsation grave (tambour)
+      ci++; };
+    step(); this._mt=setInterval(step,3000); },
+  thump(when){ if(!this.ctx) return; const ctx=this.ctx, o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine';
+    o.frequency.setValueAtTime(120,when); o.frequency.exponentialRampToValueAtTime(45,when+0.12); o.connect(g); g.connect(this.musicGain);
+    g.gain.setValueAtTime(0.0001,when); g.gain.exponentialRampToValueAtTime(0.5,when+0.012); g.gain.exponentialRampToValueAtTime(0.0001,when+0.24); o.start(when); o.stop(when+0.26); },
+  noise(dur,freq,vol,type){ if(!this.ctx) return; const ctx=this.ctx, n=Math.floor(ctx.sampleRate*dur); const buf=ctx.createBuffer(1,n,ctx.sampleRate); const d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=Math.random()*2-1; const src=ctx.createBufferSource(); src.buffer=buf; const f=ctx.createBiquadFilter(); f.type=type||'lowpass'; f.frequency.value=freq||600;
+    const g=ctx.createGain(); src.connect(f); f.connect(g); g.connect(this.master); const t=ctx.currentTime; g.gain.setValueAtTime(vol||0.18,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); src.start(t); src.stop(t+dur); },
   bell(freq,when){ if(!this.ctx) return; const ctx=this.ctx, o=ctx.createOscillator(), g=ctx.createGain();
     o.type='triangle'; o.frequency.value=freq; o.connect(g); g.connect(this.musicGain); const t=when||ctx.currentTime;
     g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.12,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+1.8); o.start(t); o.stop(t+1.9); },
@@ -1286,10 +1301,19 @@ const AUDIO={ ctx:null, master:null, musicGain:null, on:true, _lc:0,
     o.type=type||'square'; o.frequency.value=freq; o.connect(g); g.connect(this.master); const t=ctx.currentTime;
     g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.18,t+0.008); g.gain.exponentialRampToValueAtTime(0.0001,t+(dur||0.14)); o.start(t); o.stop(t+(dur||0.14)+0.02); },
   coin(){ const n=performance.now(); if(n-this._lc<55) return; this._lc=n; this.blip(940,0.07,'square',0.09); this.blip(1400,0.1,'square',0.07); },
+  // mort d'une créature : grognement descendant + souffle (joué à chaque kill)
+  death(){ const n=performance.now(); if(n-(this._ld||0)<45) return; this._ld=n; if(!this.ctx) return; const ctx=this.ctx, o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sawtooth'; const t=ctx.currentTime; o.frequency.setValueAtTime(280,t); o.frequency.exponentialRampToValueAtTime(64,t+0.17);
+    const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1200; o.connect(f); f.connect(g); g.connect(this.master);
+    g.gain.setValueAtTime(0.16,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2); o.start(t); o.stop(t+0.22); this.noise(0.13,520,0.1); },
   build(){ this.blip(160,0.13,'sawtooth',0.16); this.blip(240,0.1,'square',0.1); },
   up(){ this.blip(520,0.09,'square',0.13); this.blip(800,0.12,'square',0.11); },
   sell(){ this.blip(420,0.12,'triangle',0.12); this.blip(300,0.12,'triangle',0.1); },
-  leak(){ this.blip(110,0.32,'sawtooth',0.22); },
+  // perte de vie : cor grave descendant (menaçant mais propre, plus le buzz strident d'avant)
+  leak(){ if(!this.ctx) return; const ctx=this.ctx, t=ctx.currentTime;
+    const horn=(fr,when,dur)=>{ const o=ctx.createOscillator(),g=ctx.createGain(),fl=ctx.createBiquadFilter(); o.type='sawtooth'; fl.type='lowpass'; fl.frequency.value=850; o.frequency.value=fr;
+      o.connect(fl); fl.connect(g); g.connect(this.master); g.gain.setValueAtTime(0.0001,when); g.gain.exponentialRampToValueAtTime(0.18,when+0.04); g.gain.exponentialRampToValueAtTime(0.0001,when+dur); o.start(when); o.stop(when+dur+0.03); };
+    horn(165,t,0.32); horn(110,t+0.16,0.45); },
   shot(){ const n=performance.now(); if(n-(this._ls||0)<45) return; this._ls=n; this.blip(660,0.05,'square',0.045); },
   boom(){ const n=performance.now(); if(n-(this._lb||0)<60) return; this._lb=n; this.blip(95,0.2,'sawtooth',0.15); this.blip(150,0.1,'square',0.07); },
   wave(){ this.blip(300,0.22,'sawtooth',0.16); this.blip(400,0.28,'sawtooth',0.14); } };
@@ -1427,7 +1451,7 @@ function applySnapshot(s){
   // événements de combat (explosions, morts, tirs, leak) → FX + son
   for(const e of (s.ev||[])){
     if(e.k==='b'){ fx.push(make3DBoom(e.x,e.y,e.r,e.col)); AUDIO.boom(); }
-    else if(e.k==='d'){ fx.push(make3DBoom(e.x,e.y,e.r,e.col,true)); AUDIO.coin(); }
+    else if(e.k==='d'){ fx.push(make3DBoom(e.x,e.y,e.r,e.col,true)); AUDIO.death(); }
     else if(e.k==='l'){ AUDIO.leak(); }
     else if(e.k==='s'){ const tt=towers.get(key(e.c,e.r)); if(tt) tt.fireAnim=0.14; AUDIO.shot(); } }
   refreshUI();
