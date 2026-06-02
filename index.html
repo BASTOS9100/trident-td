@@ -112,6 +112,8 @@
       <div id="lobby">
         <h1>Trident TD</h1>
         <div id="lobbyMenu" style="display:flex;flex-direction:column;gap:10px;align-items:center">
+          <input id="pseudo" placeholder="Ton pseudo" maxlength="14" autocomplete="off"
+            style="width:248px;background:#10141c;border:1px solid #3a2f1c;color:#ecdfc4;border-radius:8px;padding:9px;font:600 14px Georgia,serif;text-align:center">
           <button class="btn primary" id="bSolo" style="min-width:260px">Jouer en local (même écran)</button>
           <button class="btn" id="bHost" style="min-width:260px">Héberger une partie en ligne</button>
           <div style="display:flex;gap:6px"><input id="joinCode" placeholder="CODE" maxlength="6"
@@ -172,6 +174,7 @@ const t0=performance.now(); const T=()=>(performance.now()-t0)/1000;
 /* ============ ETAT ============ */
 const towers=new Map(), creeps=[], projectiles=[], fx=[];
 let golds=[230,230,230,230], lives=50, score=0, waveIndex=0, waveActive=false;  // une banque par joueur
+let kills=[0,0,0,0];  // kills par joueur
 let spawnQueue=[], spawnTimer=0, spawnInterval=0.5;
 let buildType=null, selectedKey=null, hoverCell=null;
 let gameSpeed=1, paused=true, started=false, gameOver=false, won=false, creepCounter=0, projCounter=0;
@@ -395,7 +398,7 @@ function update(dt){
   refreshUI();
 }
 function hit(c,dmg,poison,by){ c.hp-=Math.max(1,dmg-(c.armor||0)); c.hitFlash=0.09; if(poison) c.poison={dps:poison.dps,t:poison.dur,slow:poison.slow,player:by}; if(c.hp<=0) killCreep(c,by); }
-function killCreep(c,by){ if(c.dead) return; c.dead=true; if(by!=null&&by>=0&&golds[by]!=null) golds[by]+=c.gold; score+=c.gold; fx.push(make3DBoom(c.x,c.y,c.r,c.col,true)); floatGold(c.x,c.y-c.r,c.gold,by); if(typeof AUDIO!=='undefined') AUDIO.coin(); netEv({k:'d',x:Math.round(c.x),y:Math.round(c.y),r:c.r,col:c.col}); }
+function killCreep(c,by){ if(c.dead) return; c.dead=true; if(by!=null&&by>=0&&golds[by]!=null){ golds[by]+=c.gold; kills[by]=(kills[by]||0)+1; } score+=c.gold; fx.push(make3DBoom(c.x,c.y,c.r,c.col,true)); floatGold(c.x,c.y-c.r,c.gold,by); if(typeof AUDIO!=='undefined') AUDIO.coin(); netEv({k:'d',x:Math.round(c.x),y:Math.round(c.y),r:c.r,col:c.col}); }
 const floats=[];
 function floatGold(px,py,amt,by){ const el=document.createElement('div'); el.textContent='+'+amt;
   const col=(by!=null&&PLAYERS[by])?PLAYERS[by].color:'#ffdf5a';
@@ -1186,8 +1189,22 @@ function buildPlayers(){ const box=$('players'); box.innerHTML='';
     el.onclick=()=>setPlayer(i); box.appendChild(el); }); }
 function setPlayer(i){ activePlayer=i; buildType=null; selectedKey=null; if(rangeRing)rangeRing.visible=false;
   document.querySelectorAll('#players .btn').forEach((el,j)=>el.classList.toggle('active', j===i)); refreshUI(); }
+function escName(s){ return String(s||'').replace(/[<>&"]/g,''); }
+function renderScoreboard(){ const el=document.getElementById('scoreboard'); if(!el) return;
+  const me=(NET.mode==='local')?activePlayer:NET.slot;
+  let html='';
+  for(let i=0;i<4;i++){ const p=PLAYERS[i], isMe=(i===me);
+    html+='<div style="display:flex;align-items:center;gap:5px;line-height:1.5;'+(isMe?'':'opacity:.78;')+'">'
+      +'<span style="color:'+p.color+';'+(isMe?'text-shadow:0 0 6px '+p.color:'')+'">●</span>'
+      +'<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+(isMe?'font-weight:700':'')+'">'+escName(p.name)+'</span>'
+      +'<span title="éliminations" style="color:#ff9a6a">⚔'+(kills[i]||0)+'</span>'
+      +'<span title="or" style="color:#e8c66a;min-width:34px;text-align:right">⛁'+(golds[i]||0)+'</span></div>';
+  }
+  el.innerHTML=html;
+}
 function refreshUI(){
   $('hWave').textContent=waveIndex+'/40'; $('hLives').textContent=lives; $('hGold').textContent=(activePlayer>=0?golds[activePlayer]:'—'); $('hScore').textContent=score;
+  renderScoreboard();
   $('bWave').disabled=waveActive||gameOver||won||waveIndex>=40; $('bWave').textContent=waveActive?'Vague en cours…':(waveIndex>=40?'Terminé':'Lancer la vague ▶');
   document.querySelectorAll('.tower-btn').forEach(el=>{ el.classList.toggle('active', el.dataset.type===buildType); el.style.opacity=(activePlayer>=0&&golds[activePlayer]>=TOWERS[el.dataset.type].cost)?1:0.5; });
   document.querySelectorAll('.speed .btn').forEach((el,i)=>el.classList.toggle('active',gameSpeed===i+1));
@@ -1237,7 +1254,7 @@ function resetGame(){
   for(const t of towers.values()) remove3D(t.obj); for(const p of projectiles) remove3D(p.obj); for(const e of fx) remove3D(e.obj);
   for(const f of floats) f.el.remove(); floats.length=0;
   towers.clear(); creeps.length=0; creepById.clear(); projById.clear(); projectiles.length=0; fx.length=0; applySnapshot._seen=false;
-  golds=[230,230,230,230]; lives=50; score=0; waveIndex=0; waveActive=false; spawnQueue=[]; creepCounter=0;
+  golds=[230,230,230,230]; kills=[0,0,0,0]; lives=50; score=0; waveIndex=0; waveActive=false; spawnQueue=[]; creepCounter=0;
   buildType=null; selectedKey=null; gameOver=false; won=false; paused=false; started=true;
   if(NET.mode!=='local') activePlayer=NET.slot;
   $('players').style.display=(NET.mode==='local')?'flex':'none';
@@ -1297,14 +1314,22 @@ function renderSlots(){ const box=$('lobbySlots'); if(!box) return; box.innerHTM
     box.appendChild(b); }); }
 function claimSlot(i){
   if(NET.mode==='host'){ if(NET.slotOwner[i]!=null && NET.slotOwner[i]!=='H') return;
-    if(NET.slot>=0) NET.slotOwner[NET.slot]=null; NET.slotOwner[i]='H'; NET.slot=i; setPlayer(i); lobbyBroadcast(); }
-  else { netSend({a:'claim',slot:i}); }
+    if(NET.slot>=0) NET.slotOwner[NET.slot]=null; NET.slotOwner[i]='H'; NET.slot=i; setPlayer(i); if(myPseudo) PLAYERS[i].name=myPseudo; lobbyBroadcast(); }
+  else { netSend({a:'claim',slot:i,name:myPseudo}); }
 }
-function lobbyBroadcast(){ // hôte : informe chaque client de l'état + de SON emplacement
-  const filled=NET.slotOwner.map(o=>o!=null);
-  for(const c of NET.conns){ if(c.open) try{ c.send({t:'lobby',filled,you:(c.slot==null?-1:c.slot)}); }catch(e){} }
-  renderSlots();
+function lobbyBroadcast(){ // hôte : informe chaque client de l'état + des pseudos + de SON emplacement
+  const filled=NET.slotOwner.map(o=>o!=null), names=PLAYERS.map(p=>p.name);
+  for(const c of NET.conns){ if(c.open) try{ c.send({t:'lobby',filled,names,you:(c.slot==null?-1:c.slot)}); }catch(e){} }
+  renderSlots(); renderScoreboard();
 }
+function sanitizeName(s){ return String(s||'').replace(/[<>&"]/g,'').trim().slice(0,14); }
+let myPseudo=''; try{ myPseudo=sanitizeName(localStorage.getItem('tridentPseudo')||''); }catch(e){}
+function setMyName(name){ name=sanitizeName(name); if(!name) return; myPseudo=name; try{ localStorage.setItem('tridentPseudo',name); }catch(e){}
+  const slot=(NET.mode==='local')?activePlayer:NET.slot;
+  if(slot>=0&&slot<4){ PLAYERS[slot].name=name;
+    if(NET.mode==='host') lobbyBroadcast();
+    else if(NET.mode==='client') netSend({a:'name',name}); }
+  renderSlots(); renderScoreboard(); }
 function hostGame(){
   if(typeof Peer==='undefined'){ lobbyStatus('Librairie réseau non chargée (vérifie ta connexion).'); return; }
   NET={mode:'host', slot:-1, conns:[], slotOwner:[null,null,null,null]};
@@ -1330,7 +1355,8 @@ function autoAssignSlots(){ // garantir que personne ne démarre sans emplacemen
 }
 function hostHandleInput(conn,m){ if(!m||!m.a) return;
   if(m.a==='claim'){ const i=m.slot; if(i>=0&&i<4 && (NET.slotOwner[i]==null||NET.slotOwner[i]===conn)){
-      if(conn.slot!=null) NET.slotOwner[conn.slot]=null; NET.slotOwner[i]=conn; conn.slot=i; lobbyBroadcast(); } return; }
+      if(conn.slot!=null) NET.slotOwner[conn.slot]=null; NET.slotOwner[i]=conn; conn.slot=i; if(m.name) PLAYERS[i].name=sanitizeName(m.name); lobbyBroadcast(); } return; }
+  if(m.a==='name'){ if(conn.slot!=null&&m.name) { PLAYERS[conn.slot].name=sanitizeName(m.name); lobbyBroadcast(); } return; }
   if(conn.slot==null) return;
   const save=activePlayer; activePlayer=conn.slot;   // l'action s'applique à la banque/zone de CE joueur
   if(m.a==='place'){ if(zoneOf(m.c,m.r)===PLAYERS[conn.slot].zone) placeTower(m.c,m.r,m.type); }
@@ -1359,7 +1385,11 @@ function clientReconnect(){ if(NET.mode!=='client'||NET._recon) return; NET.trie
   if(NET.tries>8){ lobbyStatus('Reconnexion impossible. Recharge la page (F5) pour réessayer.'); return; }
   NET._recon=true; setTimeout(()=>{ NET._recon=false; if(NET.mode==='client') clientConnect(); }, 1400); }
 function clientHandle(m){
-  if(m.t==='lobby'){ NET.filled=m.filled; NET.slot=(m.you!=null?m.you:-1); setPlayer(NET.slot); renderSlots();
+  if(m.t==='lobby'){ NET.filled=m.filled; NET.slot=(m.you!=null?m.you:-1);
+    if(m.names) for(let i=0;i<4&&i<m.names.length;i++){ if(m.names[i]) PLAYERS[i].name=m.names[i]; }
+    // si je viens d'obtenir mon emplacement et que j'ai un pseudo, je l'envoie
+    if(NET.slot>=0 && myPseudo && PLAYERS[NET.slot].name!==myPseudo){ netSend({a:'name',name:myPseudo}); }
+    setPlayer(NET.slot); renderSlots(); renderScoreboard();
     lobbyStatus(NET.slot>=0?('Emplacement : '+PLAYERS[NET.slot].name+'. En attente du lancement par l\'hôte…'):'Choisis ton emplacement.'); }
   else if(m.t==='start'){ if(m.you!=null&&m.you>=0) NET.slot=m.you; setPlayer(NET.slot); $('lobby').style.display='none'; resetGame(); }
   else if(m.t==='state'){ applySnapshot(m); }
@@ -1369,11 +1399,12 @@ function buildSnapshot(){
   const tw=[]; for(const t of towers.values()) tw.push([t.c,t.r,t.type,t.level,t.player]);
   const pj=[]; for(const p of projectiles){ if(p.done) continue; pj.push([p.id,Math.round(p.x),Math.round(p.y),p.color,p.type==='cannon'?1:0]); }
   const ev=NET.events||[]; NET.events=[];
-  return {t:'state',g:golds,l:lives,sc:score,w:waveIndex,wa:waveActive?1:0,go:gameOver?1:0,wn:won?1:0,cr,tw,pj,ev};
+  return {t:'state',g:golds,k:kills,l:lives,sc:score,w:waveIndex,wa:waveActive?1:0,go:gameOver?1:0,wn:won?1:0,cr,tw,pj,ev,nm:PLAYERS.map(p=>p.name)};
 }
 function applySnapshot(s){
   const first=!applySnapshot._seen; applySnapshot._seen=true;
-  golds=s.g; lives=s.l; score=s.sc; waveIndex=s.w; waveActive=!!s.wa;
+  golds=s.g; if(s.k) kills=s.k; lives=s.l; score=s.sc; waveIndex=s.w; waveActive=!!s.wa;
+  if(s.nm) for(let i=0;i<4&&i<s.nm.length;i++){ if(s.nm[i]) PLAYERS[i].name=s.nm[i]; }
   // fin de partie synchronisée
   if(s.wn && !won) endGame(true); else if(s.go && !gameOver) endGame(false);
   else if(!s.go && !s.wn && (gameOver||won)){ /* hôte a relancé : géré par 'start' */ }
@@ -1405,9 +1436,14 @@ function applySnapshot(s){
 const flashEl=document.createElement('div'); flashEl.id='flash';
 flashEl.style.cssText='position:absolute;top:10px;left:50%;transform:translateX(-50%);color:#fff;font:bold 17px Georgia;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .2s;pointer-events:none;z-index:4;';
 document.getElementById('board').appendChild(flashEl);
+// tableau discret : kills + or par joueur
+const scoreEl=document.createElement('div'); scoreEl.id='scoreboard';
+scoreEl.style.cssText='position:absolute;top:58px;left:10px;z-index:3;background:rgba(12,16,22,.5);border:1px solid rgba(120,100,60,.35);border-radius:8px;padding:5px 8px;color:#ecdfc4;font:12px Georgia,serif;min-width:158px;backdrop-filter:blur(2px);pointer-events:none;';
+document.getElementById('board').appendChild(scoreEl);
 
 // ---- lobby / pré-menu ----
-$('bSolo').onclick=()=>{ AUDIO.init(); AUDIO.resume(); NET={mode:'local',slot:0}; $('lobby').style.display='none'; setPlayer(0); resetGame(); };
+if($('pseudo')){ if(myPseudo) $('pseudo').value=myPseudo; $('pseudo').addEventListener('input',e=>setMyName(e.target.value)); }
+$('bSolo').onclick=()=>{ AUDIO.init(); AUDIO.resume(); NET={mode:'local',slot:0}; if(myPseudo) PLAYERS[0].name=myPseudo; $('lobby').style.display='none'; setPlayer(0); resetGame(); };
 $('bHost').onclick=()=>{ AUDIO.init(); AUDIO.resume(); hostGame(); };
 $('bJoin').onclick=()=>{ AUDIO.init(); AUDIO.resume(); joinGame($('joinCode').value); };
 $('joinCode').addEventListener('keydown',e=>{ if(e.key==='Enter') $('bJoin').click(); });
