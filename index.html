@@ -175,6 +175,7 @@ const t0=performance.now(); const T=()=>(performance.now()-t0)/1000;
 const towers=new Map(), creeps=[], projectiles=[], fx=[];
 let golds=[230,230,230,230], lives=50, score=0, waveIndex=0, waveActive=false;  // une banque par joueur
 let kills=[0,0,0,0];  // kills par joueur
+let nextWaveTimer=0;  // compte à rebours (s) avant lancement auto de la prochaine vague (0 = inactif)
 let spawnQueue=[], spawnTimer=0, spawnInterval=0.5;
 let buildType=null, selectedKey=null, hoverCell=null;
 let gameSpeed=1, paused=true, started=false, gameOver=false, won=false, creepCounter=0, projCounter=0;
@@ -293,6 +294,7 @@ function waveSpec(w){
 function startWave(){
   if(NET.mode==='client'){ netSend({a:'wave'}); return; }
   if(waveActive||gameOver||won||waveIndex>=40) return;
+  nextWaveTimer=0;   // annule le compte à rebours auto (lancement immédiat)
   waveIndex++; const spec=waveSpec(waveIndex); spawnQueue=[];
   // chaque spawn extra envoie ~40% des unités d'UN spawn normal (count/3)
   const extraN=Math.round(spec.count*0.40/3);
@@ -394,7 +396,9 @@ function update(dt){
   for(let i=fx.length-1;i>=0;i--){ fx[i].t-=dt; if(fx[i].t<=0){ remove3D(fx[i].obj); fx.splice(i,1); } }
   for(let i=creeps.length-1;i>=0;i--) if(creeps[i].dead){ remove3D(creeps[i].obj); if(creeps[i].bar) creeps[i].bar.remove(); creeps.splice(i,1); }
   if(waveActive&&!spawnQueue.length&&!creeps.length){ waveActive=false; const bonus=10+waveIndex; for(let i=0;i<4;i++) golds[i]+=bonus; score+=bonus;
-    flashMsg('Vague nettoyée ! +'+bonus+' or (chacun)'); if(waveIndex>=40) endGame(true); }
+    flashMsg('Vague nettoyée ! +'+bonus+' or (chacun)'); if(waveIndex>=40) endGame(true); else nextWaveTimer=10; }   // prochaine vague auto dans 10s
+  // compte à rebours auto entre les vagues
+  if(nextWaveTimer>0 && !waveActive && !gameOver && !won){ nextWaveTimer-=dt; if(nextWaveTimer<=0){ nextWaveTimer=0; startWave(); } }
   refreshUI();
 }
 function hit(c,dmg,poison,by){ c.hp-=Math.max(1,dmg-(c.armor||0)); c.hitFlash=0.09; if(poison) c.poison={dps:poison.dps,t:poison.dur,slow:poison.slow,player:by}; if(c.hp<=0) killCreep(c,by); }
@@ -1205,7 +1209,8 @@ function renderScoreboard(){ const el=document.getElementById('scoreboard'); if(
 function refreshUI(){
   $('hWave').textContent=waveIndex+'/40'; $('hLives').textContent=lives; $('hGold').textContent=(activePlayer>=0?golds[activePlayer]:'—'); $('hScore').textContent=score;
   renderScoreboard();
-  $('bWave').disabled=waveActive||gameOver||won||waveIndex>=40; $('bWave').textContent=waveActive?'Vague en cours…':(waveIndex>=40?'Terminé':'Lancer la vague ▶');
+  const _cd=nextWaveTimer>0?Math.ceil(nextWaveTimer):0;
+  $('bWave').disabled=waveActive||gameOver||won||waveIndex>=40; $('bWave').textContent=waveActive?'Vague en cours…':(waveIndex>=40?'Terminé':(_cd>0?('Vague auto dans '+_cd+'s — lancer ▶'):'Lancer la vague ▶'));
   document.querySelectorAll('.tower-btn').forEach(el=>{ el.classList.toggle('active', el.dataset.type===buildType); el.style.opacity=(activePlayer>=0&&golds[activePlayer]>=TOWERS[el.dataset.type].cost)?1:0.5; });
   document.querySelectorAll('.speed .btn').forEach((el,i)=>el.classList.toggle('active',gameSpeed===i+1));
   // panneau sélection : reconstruit UNIQUEMENT au changement (sinon les boutons sont recréés chaque frame → clics perdus)
@@ -1254,7 +1259,7 @@ function resetGame(){
   for(const t of towers.values()) remove3D(t.obj); for(const p of projectiles) remove3D(p.obj); for(const e of fx) remove3D(e.obj);
   for(const f of floats) f.el.remove(); floats.length=0;
   towers.clear(); creeps.length=0; creepById.clear(); projById.clear(); projectiles.length=0; fx.length=0; applySnapshot._seen=false;
-  golds=[230,230,230,230]; kills=[0,0,0,0]; lives=50; score=0; waveIndex=0; waveActive=false; spawnQueue=[]; creepCounter=0;
+  golds=[230,230,230,230]; kills=[0,0,0,0]; lives=50; score=0; waveIndex=0; waveActive=false; nextWaveTimer=0; spawnQueue=[]; creepCounter=0;
   buildType=null; selectedKey=null; gameOver=false; won=false; paused=false; started=true;
   if(NET.mode!=='local') activePlayer=NET.slot;
   $('players').style.display=(NET.mode==='local')?'flex':'none';
@@ -1423,11 +1428,11 @@ function buildSnapshot(){
   const tw=[]; for(const t of towers.values()) tw.push([t.c,t.r,t.type,t.level,t.player]);
   const pj=[]; for(const p of projectiles){ if(p.done) continue; pj.push([p.id,Math.round(p.x),Math.round(p.y),p.color,p.type==='cannon'?1:0]); }
   const ev=NET.events||[]; NET.events=[];
-  return {t:'state',g:golds,k:kills,l:lives,sc:score,w:waveIndex,wa:waveActive?1:0,go:gameOver?1:0,wn:won?1:0,cr,tw,pj,ev,nm:PLAYERS.map(p=>p.name)};
+  return {t:'state',g:golds,k:kills,l:lives,sc:score,w:waveIndex,wa:waveActive?1:0,nwt:nextWaveTimer,go:gameOver?1:0,wn:won?1:0,cr,tw,pj,ev,nm:PLAYERS.map(p=>p.name)};
 }
 function applySnapshot(s){
   const first=!applySnapshot._seen; applySnapshot._seen=true;
-  golds=s.g; if(s.k) kills=s.k; lives=s.l; score=s.sc; waveIndex=s.w; waveActive=!!s.wa;
+  golds=s.g; if(s.k) kills=s.k; lives=s.l; score=s.sc; waveIndex=s.w; waveActive=!!s.wa; nextWaveTimer=s.nwt||0;
   if(s.nm) for(let i=0;i<4&&i<s.nm.length;i++){ if(s.nm[i]) PLAYERS[i].name=s.nm[i]; }
   // fin de partie synchronisée
   if(s.wn && !won) endGame(true); else if(s.go && !gameOver) endGame(false);
