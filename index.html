@@ -1555,16 +1555,22 @@ $('bStart').onclick=()=>{ if(NET.mode!=='host') return;
   setPlayer(NET.slot); $('lobby').style.display='none'; resetGame(); };
 $('bBack').onclick=()=>{ try{ if(NET.peer) NET.peer.destroy(); }catch(e){} NET={mode:'local',slot:0}; $('lobbyRoom').style.display='none'; $('lobbyMenu').style.display='flex'; };
 
-// ---- écran de chargement : on attend que TOUS les assets soient prêts (visuels identiques chez tous, zéro pop de texture) ----
-function hideLoader(){ if(assetsReady) return; assetsReady=true;
+// ---- écran de chargement STRICT : le jeu ne démarre que quand TOUS les décors + unités sont chargés ----
+function hideLoader(){ if(assetsReady) return; assetsReady=true; if(_loaderPoll) clearInterval(_loaderPoll);
   const el=document.getElementById('loader'); if(el){ el.style.opacity='0'; setTimeout(()=>{ el.style.display='none'; },650); }
   if(_pendingStart){ _pendingStart=false; resetGame(); } }
-if(LOADER_MGR){
-  LOADER_MGR.onProgress=(url,loaded,total)=>{ const p=total?Math.round(loaded/total*100):100; const b=document.getElementById('loaderBar'), t=document.getElementById('loaderPct'); if(b)b.style.width=p+'%'; if(t)t.textContent=p+'%'; };
-  LOADER_MGR.onLoad=()=>{ const b=document.getElementById('loaderBar'),t=document.getElementById('loaderPct'); if(b)b.style.width='100%'; if(t)t.textContent='100%'; setTimeout(hideLoader,250); };
-}
-// filets de sécurité : ne jamais rester bloqué sur le loader
-setTimeout(hideLoader, 45000);
+function assetsAllLoaded(){ try{ return Object.keys(ENV).every(k=>envCache[k]) && Object.keys(MODELS).every(k=>gltfCache[k]); }catch(e){ return false; } }
+let _loaderPoll=setInterval(()=>{ if(assetsReady){ clearInterval(_loaderPoll); return; }
+  const ek=Object.keys(ENV), mk=Object.keys(MODELS);
+  const e=ek.filter(k=>envCache[k]).length, m=mk.filter(k=>gltfCache[k]).length;
+  const pct=Math.round((e+m)/(ek.length+mk.length)*100);
+  const bar=document.getElementById('loaderBar'), pc=document.getElementById('loaderPct'), msg=document.getElementById('loaderMsg');
+  if(bar) bar.style.width=pct+'%'; if(pc) pc.textContent=pct+'%';
+  if(msg) msg.textContent='Décors '+e+'/'+ek.length+' · Créatures '+m+'/'+mk.length+' — patiente, tout se télécharge…';
+  if(assetsAllLoaded()){ clearInterval(_loaderPoll); hideLoader(); }
+}, 300);
+// dernier recours : si après 4 min ce n'est toujours pas complet (connexion vraiment trop lente), on démarre quand même
+setTimeout(()=>{ if(!assetsReady){ console.warn('Chargement incomplet après 4 min — démarrage en mode dégradé'); hideLoader(); } }, 240000);
 
 if(typeof THREE!=='undefined'){ initScene(); buildPalette(); buildPlayers(); setPlayer(0); refreshUI(); updateNextPreview(); requestAnimationFrame(loop); }
 else { hideLoader(); }
