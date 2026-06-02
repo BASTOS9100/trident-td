@@ -1,0 +1,17 @@
+# Outils / non nécessaires pour la version en ligne (GitHub Pages)
+cloudflared.exe
+*.bat
+
+# Modèles 3D téléchargés mais NON utilisés par le jeu (gardés en local, exclus du déploiement)
+models/Barbarian.glb
+models/Fox.glb
+models/Robot.glb
+models/Mage.glb
+models/Skeleton_Rogue.glb
+models/XBot.fbx
+models/Ty.fbx
+models/goblin_d_shareyko.fbx
+models/Maw J Laygo.fbx
+models/Mutant.fbx.bak
+models/Nightshade J Friedrich.fbx
+models/Knight D Pelegrini.fbx
