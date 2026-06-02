@@ -948,43 +948,64 @@ function tintModelByLevel(root, level){ const lv=Math.min(Math.max(level,1),4); 
 function rebuildTower(t){ if(t.obj) remove3D(t.obj); make3DTower(t); if(t.obj) t.obj.userData.towerKey=key(t.c,t.r); }
 function make3DTower(t){
   const b=TOWERS[t.type], g=new THREE.Group(); g.position.set(t.x/CELL,TOP,t.y/CELL);
-  // anneau couleur du joueur propriétaire
   const pc=(PLAYERS[t.player]||PLAYERS[0]).color;
   const ownRing=new THREE.Mesh(new THREE.TorusGeometry(0.48,0.055,8,24), MAT(pc,{emissive:pc,ei:1.4})); ownRing.rotation.x=-Math.PI/2; ownRing.position.y=0.06; ownRing.userData.noTint=true; g.add(ownRing);
   g.add(towerPlatform());
-  const stone=towerStone(), wood=MAT('#5a4326',{rough:0.85}), iron=MAT('#2c2a28',{metal:0.85,rough:0.4});
+  const stone=towerStone(), wood=MAT('#5a4326',{rough:0.85}), darkwood=MAT('#3a2c1a',{rough:0.85}), iron=MAT('#2c2a28',{metal:0.85,rough:0.4}), glow=[];
   const accent=col=>{ const m=new THREE.Mesh(new THREE.SphereGeometry(0.1,16,14), MAT(col,{emissive:col,ei:2.8,rough:0.2})); m.userData.noTint=true; return m; };
-  // créneaux : couronne de merlons en pierre
   const crenels=(rad,n,y,sz)=>{ for(let i=0;i<n;i++){ const a=i/n*6.2832; const m=new THREE.Mesh(new THREE.BoxGeometry(sz,0.2,sz),stone); m.position.set(Math.cos(a)*rad,y,Math.sin(a)*rad); m.castShadow=true; g.add(m); } };
+  // bande de runes lumineuses (pulse) gravée sur le corps
+  const runeBand=(rad,y)=>{ const mat=MAT(b.color,{emissive:b.color,ei:1.5}).clone(); mat.userData={ei0:1.5}; const m=new THREE.Mesh(new THREE.TorusGeometry(rad,0.022,6,30),mat); m.rotation.x=-Math.PI/2; m.position.y=y; m.userData.noTint=true; g.add(m); glow.push(mat); };
+  // bannière aux couleurs du joueur (héraldique WC3)
+  const banner=(x,z,y,ang)=>{ const grp=new THREE.Group(); grp.position.set(x,y,z); grp.rotation.y=ang||0;
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.022,0.022,0.5,6), darkwood); pole.position.y=0.05; pole.userData.noTint=true; grp.add(pole);
+    const cloth=new THREE.Mesh(new THREE.PlaneGeometry(0.22,0.3), new THREE.MeshStandardMaterial({color:new THREE.Color(pc), roughness:0.7, emissive:new THREE.Color(pc), emissiveIntensity:0.25, side:THREE.DoubleSide})); cloth.position.set(0.12,0.12,0); cloth.userData.noTint=true; grp.add(cloth);
+    const fin=accent(pc); fin.scale.setScalar(0.45); fin.position.y=0.3; grp.add(fin); g.add(grp); };
   let turret=null;
-  if(t.type==='arrow'){
-    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.4,1.3,16), stone); body.position.y=1.0; body.castShadow=body.receiveShadow=true; g.add(body);
-    crenels(0.34,8,1.7,0.13);
-    const deck=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.1,16), wood); deck.position.y=1.62; deck.castShadow=true; g.add(deck);
+  if(t.type==='arrow'){           // TOUR DE GUET : corps pierre, toit conique sur poteaux, bannière
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.42,1.35,16), stone); body.position.y=1.0; body.castShadow=body.receiveShadow=true; g.add(body);
+    crenels(0.34,8,1.72,0.13); runeBand(0.43,0.66);
+    const deck=new THREE.Mesh(new THREE.CylinderGeometry(0.37,0.37,0.1,16), wood); deck.position.y=1.62; deck.castShadow=true; g.add(deck);
+    for(let i=0;i<4;i++){ const a=i/4*6.2832+0.78; const p=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.52,6), darkwood); p.position.set(Math.cos(a)*0.3,1.92,Math.sin(a)*0.3); g.add(p); }
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(0.52,0.55,8), MAT('#a23a2a',{rough:0.65})); roof.position.y=2.46; roof.castShadow=true; g.add(roof);
+    banner(0.34,0,1.66,Math.PI/2);
     turret=new THREE.Group(); turret.position.y=1.74;
     const bow=new THREE.Mesh(new THREE.TorusGeometry(0.27,0.05,8,20,Math.PI), MAT('#caa840',{metal:0.5,rough:0.4})); bow.rotation.x=Math.PI/2; turret.add(bow);
     const tip=accent(b.color); tip.position.set(0,0,0.27); turret.add(tip); g.add(turret);
-  } else if(t.type==='cannon'){
-    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.58,0.85,16), stone); body.position.y=0.62; body.castShadow=true; g.add(body);
-    crenels(0.5,10,1.02,0.15);
-    turret=new THREE.Group(); turret.position.y=0.98;
+  } else if(t.type==='cannon'){    // BASTION : trapu, cerclé de fer, boulets empilés, bannière
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.6,0.9,16), stone); body.position.y=0.64; body.castShadow=true; g.add(body);
+    for(const yy of [0.4,0.88]){ const band=new THREE.Mesh(new THREE.TorusGeometry(0.56,0.04,8,24), iron); band.rotation.x=-Math.PI/2; band.position.y=yy; g.add(band); }
+    crenels(0.52,10,1.06,0.15); runeBand(0.5,0.3);
+    // boulets empilés en décor
+    for(let i=0;i<3;i++){ const cb=new THREE.Mesh(new THREE.SphereGeometry(0.1,10,8), iron); cb.position.set(-0.34+i*0.16,1.16,-0.34); g.add(cb); }
+    const cb2=new THREE.Mesh(new THREE.SphereGeometry(0.1,10,8), iron); cb2.position.set(-0.26,1.16,-0.42); g.add(cb2);
+    banner(0,-0.5,1.0,0);
+    turret=new THREE.Group(); turret.position.y=1.02;
     const mount=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.2,0.34),wood); turret.add(mount);
-    const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.21,0.27,0.9,18), iron); barrel.rotation.x=Math.PI/2; barrel.position.set(0,0.12,0.36); turret.add(barrel); turret.userData.barrel=barrel;
-    const rim=new THREE.Mesh(new THREE.TorusGeometry(0.21,0.045,8,18), MAT('#b8902c',{metal:0.9,rough:0.3})); rim.position.set(0,0.12,0.8); turret.add(rim); g.add(turret);
-  } else if(t.type==='aa'){
-    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.42,2.0,14), stone); body.position.y=1.15; body.castShadow=true; g.add(body);
-    crenels(0.26,6,2.0,0.11);
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.32,0.035,8,28), MAT(b.color,{emissive:b.color,ei:2.4,rough:0.2})); ring.userData.noTint=true; ring.rotation.x=Math.PI/2; ring.position.y=2.25; g.add(ring);
-    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.26,0), MAT(b.color,{emissive:b.color,ei:3.2,rough:0.05,metal:0.2})); crystal.userData.noTint=true; crystal.position.y=2.3; g.add(crystal); g.userData.crystal=crystal;
-  } else {
-    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.44,0.52,0.78,14), stone); body.position.y=0.6; body.castShadow=true; g.add(body);
-    crenels(0.44,8,0.98,0.12);
-    const rf=new THREE.Mesh(new THREE.ConeGeometry(0.56,0.5,12), MAT('#3a2e1c',{rough:0.8})); rf.position.y=1.18; rf.castShadow=true; g.add(rf);
-    const cauldron=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.2,0.32,14), iron); cauldron.position.set(0,0.78,0.34); cauldron.castShadow=true; g.add(cauldron);
-    const brew=new THREE.Mesh(new THREE.CylinderGeometry(0.23,0.23,0.06,14), MAT(b.color,{emissive:b.color,ei:1.8})); brew.position.set(0,0.95,0.34); brew.userData.noTint=true; g.add(brew); g.userData.brew=brew;
+    const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.21,0.27,0.92,18), iron); barrel.rotation.x=Math.PI/2; barrel.position.set(0,0.12,0.36); turret.add(barrel); turret.userData.barrel=barrel;
+    const rim=new THREE.Mesh(new THREE.TorusGeometry(0.21,0.045,8,18), MAT('#b8902c',{metal:0.9,rough:0.3})); rim.position.set(0,0.12,0.82); turret.add(rim); g.add(turret);
+  } else if(t.type==='aa'){        // SPIRE ARCANIQUE : flèche élancée, runes qui montent, cristal flottant + anneaux
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.46,0.7,12), stone); base.position.y=0.5; base.castShadow=true; g.add(base);
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.3,1.5,12), stone); shaft.position.y=1.45; shaft.castShadow=true; g.add(shaft);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.2,0.35,12), stone); cap.position.y=2.35; g.add(cap);
+    // runes qui montent le long de la flèche
+    for(let i=0;i<5;i++){ const a=i*1.4, yy=0.9+i*0.28; const rmat=MAT(b.color,{emissive:b.color,ei:1.6}).clone(); rmat.userData={ei0:1.6};
+      const rn=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.1,0.05), rmat); rn.position.set(Math.cos(a)*0.22,yy,Math.sin(a)*0.22); rn.userData.noTint=true; g.add(rn); glow.push(rmat); }
+    // cristal flottant + 2 anneaux arcaniques
+    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.27,0), MAT(b.color,{emissive:b.color,ei:3.2,rough:0.05,metal:0.2})); crystal.userData.noTint=true; crystal.position.y=2.95; g.add(crystal); g.userData.crystal=crystal;
+    const rings=[]; for(let i=0;i<2;i++){ const rm=new THREE.Mesh(new THREE.TorusGeometry(0.3-i*0.08,0.018,6,30), new THREE.MeshBasicMaterial({color:b.color,transparent:true,opacity:0.8,blending:THREE.AdditiveBlending,depthWrite:false})); rm.position.y=2.95; rm.rotation.x=i?1.0:Math.PI/2; rm.userData.noTint=true; g.add(rm); rings.push(rm); } g.userData.aaRings=rings;
+  } else {                         // ALCHIMISTE : hutte + toit pointu de sorcier, chaudron bouillonnant + bulles
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.44,0.52,0.8,12), stone); body.position.y=0.6; body.castShadow=true; g.add(body);
+    crenels(0.44,8,1.0,0.1); runeBand(0.5,0.34);
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(0.6,1.0,12), MAT('#37502a',{rough:0.8})); roof.position.y=1.5; roof.rotation.z=0.06; roof.castShadow=true; g.add(roof);
+    banner(0,-0.5,1.0,0);
+    const cauldron=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.2,0.34,14), iron); cauldron.position.set(0,0.82,0.36); cauldron.castShadow=true; g.add(cauldron);
+    const brew=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.24,0.06,14), MAT(b.color,{emissive:b.color,ei:1.8})); brew.position.set(0,1.0,0.36); brew.userData.noTint=true; g.add(brew); g.userData.brew=brew;
+    // bulles qui montent
+    const bubbles=[]; for(let i=0;i<4;i++){ const bb=new THREE.Mesh(new THREE.SphereGeometry(0.03+Math.random()*0.03,8,6), new THREE.MeshBasicMaterial({color:b.color,transparent:true,opacity:0.7})); bb.position.set((Math.random()-0.5)*0.2,1.0+Math.random()*0.3,0.36+(Math.random()-0.5)*0.2); bb.userData={minY:1.0,maxY:1.45}; bb.userData.noTint=true; g.add(bb); bubbles.push(bb); } g.userData.bubbles=bubbles;
   }
   tintModelByLevel(g, t.level);
-  g.userData.turret=turret; t.obj=g; scene.add(g);
+  g.userData.turret=turret; g.userData.glow=glow; t.obj=g; scene.add(g);
 }
 function updateTowerPips(t){ rebuildTower(t); }
 
@@ -1223,8 +1244,11 @@ function render3D(){
   }
   for(const tw of towers.values()){ const g=tw.obj; if(!g) continue; const tr=g.userData.turret;
     if(tr){ tr.rotation.y=Math.atan2(Math.cos(tw.aim),Math.sin(tw.aim)); const rec=tw.fireAnim>0?tw.fireAnim*0.3:0; if(tr.userData.barrel) tr.userData.barrel.position.z=0.32-rec; }
-    if(g.userData.crystal){ const cr=g.userData.crystal; cr.material.emissiveIntensity=2.6+Math.sin(t*3+tw.x)*1.1; cr.position.y=2.3+Math.sin(t*1.6+tw.x)*0.05; }
+    if(g.userData.crystal){ const cr=g.userData.crystal; cr.material.emissiveIntensity=2.6+Math.sin(t*3+tw.x)*1.1; cr.rotation.y=t*0.8; cr.position.y=2.95+Math.sin(t*1.6+tw.x)*0.06; }
+    if(g.userData.aaRings){ const R=g.userData.aaRings; for(let i=0;i<R.length;i++){ R[i].rotation.z=t*(0.9+i*0.7)*(i%2?-1:1); } }
     if(g.userData.brew){ g.userData.brew.material.emissiveIntensity=1.4+Math.sin(t*4)*0.5; }
+    if(g.userData.bubbles){ for(const bb of g.userData.bubbles){ bb.position.y+=0.008; if(bb.position.y>bb.userData.maxY){ bb.position.y=bb.userData.minY; } } }
+    if(g.userData.glow){ const p=0.6+0.4*Math.sin(t*2.6+tw.x); for(const m of g.userData.glow) m.emissiveIntensity=(m.userData.ei0||1.5)*p; }
   }
   for(const p of projectiles){ if(!p.obj) continue;
     if(p.oriented){ const tx=p.target?p.target.x:p.ntx, ty=p.target?p.target.y:p.nty; if(tx!=null && (tx!==p.x||ty!==p.y)) p.obj.rotation.y=Math.atan2(tx-p.x, ty-p.y); }
