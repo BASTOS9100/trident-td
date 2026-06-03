@@ -513,6 +513,18 @@ function preloadModels(){ const L=THREE.GLTFLoader?new THREE.GLTFLoader(LOADER_M
     const ok=fbx?(obj=>{ gltfCache[k]={scene:obj, animations:obj.animations||[]}; tryPrewarm(); }):(g=>{ gltfCache[k]=g; tryPrewarm(); });
     const tryLoad=att=>{ (fbx?F:L).load(path, ok, undefined, ()=>{ if(att<5) setTimeout(()=>tryLoad(att+1),500); else console.warn('modèle manquant après retries:',k); }); };
     tryLoad(0); } }
+// tours haute-déf (modèles Meshy optimisés, statiques → feedback d'attaque procédural)
+const GEN_TOWER={ arrow:{f:'tower_arrow_opt',h:1.85,yaw:0,aim:false}, cannon:{f:'tower_cannon_opt',h:1.5,yaw:0,aim:true}, aa:{f:'tower_aa_opt',h:1.7,yaw:Math.PI,aim:true}, poison:{f:'tower_poison_opt',h:2.05,yaw:0,aim:false} };
+const genCache={};
+function loadGenTowers(){ if(!THREE.GLTFLoader) return; const L=new THREE.GLTFLoader(LOADER_MGR||undefined), V=new THREE.Vector3();
+  for(const k in GEN_TOWER){ const cfg=GEN_TOWER[k];
+    const tryLoad=att=>{ L.load('models/gen/'+cfg.f+'.glb', g=>{ const sc=g.scene;
+      sc.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; if(o.material) o.material.envMapIntensity=0.85; } });
+      let box=new THREE.Box3().setFromObject(sc); let sz=box.getSize(V); const s=cfg.h/Math.max(sz.x,sz.y,sz.z); sc.scale.setScalar(s); sc.updateMatrixWorld(true);
+      box=new THREE.Box3().setFromObject(sc); const c=box.getCenter(new THREE.Vector3()); sc.position.set(-c.x,-box.min.y,-c.z);   // base à y=0, centré XZ
+      genCache[k]=sc; tryPrewarm();
+    }, undefined, ()=>{ if(att<5) setTimeout(()=>tryLoad(att+1),500); else console.warn('tour gen manquante:',k); }); };
+    tryLoad(0); } }
 let _prewarmed=false;
 function tryPrewarm(){ // précompile tous les shaders (modèles + bâtiments) pour éviter les à-coups
   if(_prewarmed||!renderer||!camera) return;
@@ -662,7 +674,7 @@ function initScene(){
   scene.add(sun); scene.add(sun.target); sun.target.position.set(COLS/2,0,ROWS/2);
   const rim=new THREE.DirectionalLight('#5a78ff',0.5); rim.position.set(24,18,30); scene.add(rim);
   raycaster=new THREE.Raycaster(); groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0), -TOP);
-  preloadModels(); loadEnv(); buildWorld(); buildBoard(); buildParticles(); buildGrass(); buildAtmosphereFX();
+  preloadModels(); loadGenTowers(); loadEnv(); buildWorld(); buildBoard(); buildParticles(); buildGrass(); buildAtmosphereFX();
   hoverMesh=new THREE.Mesh(new THREE.BoxGeometry(0.98,0.1,0.98), new THREE.MeshBasicMaterial({color:'#7af06a',transparent:true,opacity:0.45}));
   hoverMesh.position.y=TOP+0.06; hoverMesh.visible=false; scene.add(hoverMesh);
   const rg=new THREE.RingGeometry(0.97,1,56); rg.rotateX(-Math.PI/2);
@@ -968,6 +980,15 @@ function make3DTower(t){
   const pc=(PLAYERS[t.player]||PLAYERS[0]).color;
   const ownRing=new THREE.Mesh(new THREE.TorusGeometry(0.48,0.055,8,24), MAT(pc,{emissive:pc,ei:1.4})); ownRing.rotation.x=-Math.PI/2; ownRing.position.y=0.06; ownRing.userData.noTint=true; g.add(ownRing);
   g.add(towerPlatform());
+  // ---- tours haute-déf (modèles Meshy) si chargées ----
+  if(genCache[t.type]){ const cfg=GEN_TOWER[t.type];
+    const turret=new THREE.Group(); turret.position.y=0.36; turret.rotation.y=cfg.yaw; turret.userData.yawOff=cfg.yaw;
+    const m=genCache[t.type].clone(true); turret.add(m); tintModelByLevel(m,t.level);
+    const flash=new THREE.Mesh(new THREE.SphereGeometry(0.16,12,10), new THREE.MeshBasicMaterial({color:new THREE.Color(b.color),transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
+    flash.position.set(0, cfg.h*0.55, cfg.h*0.55); flash.userData.noTint=true; turret.add(flash);
+    g.add(turret);
+    g.userData.turret=cfg.aim?turret:null; g.userData.gmdl=turret; g.userData.gmdlY=0.36; g.userData.flash=flash;
+    t.obj=g; scene.add(g); return; }
   const stone=towerStone(), wood=MAT('#5a4326',{rough:0.85}), darkwood=MAT('#3a2c1a',{rough:0.85}), iron=MAT('#2c2a28',{metal:0.85,rough:0.4}), glow=[];
   const accent=col=>{ const m=new THREE.Mesh(new THREE.SphereGeometry(0.1,16,14), MAT(col,{emissive:col,ei:2.8,rough:0.2})); m.userData.noTint=true; return m; };
   const crenels=(rad,n,y,sz)=>{ for(let i=0;i<n;i++){ const a=i/n*6.2832; const m=new THREE.Mesh(new THREE.BoxGeometry(sz,0.2,sz),stone); m.position.set(Math.cos(a)*rad,y,Math.sin(a)*rad); m.castShadow=true; g.add(m); } };
@@ -1260,7 +1281,9 @@ function render3D(){
       else c.bar.el.style.display='none'; } else c.bar.el.style.display='none'; }
   }
   for(const tw of towers.values()){ const g=tw.obj; if(!g) continue; const tr=g.userData.turret;
-    if(tr){ tr.rotation.y=Math.atan2(Math.cos(tw.aim),Math.sin(tw.aim)); const rec=tw.fireAnim>0?tw.fireAnim*0.3:0; if(tr.userData.barrel) tr.userData.barrel.position.z=0.32-rec; }
+    if(tr){ tr.rotation.y=Math.atan2(Math.cos(tw.aim),Math.sin(tw.aim))+(tr.userData.yawOff||0); const rec=tw.fireAnim>0?tw.fireAnim*0.3:0; if(tr.userData.barrel) tr.userData.barrel.position.z=0.32-rec; }
+    if(g.userData.gmdl){ const f=tw.fireAnim>0?tw.fireAnim/0.14:0; const m=g.userData.gmdl; m.position.y=(g.userData.gmdlY||0.36)-f*0.04; m.scale.setScalar(1+f*0.12); }
+    if(g.userData.flash){ g.userData.flash.material.opacity=tw.fireAnim>0?Math.min(0.95,tw.fireAnim*7):0; }
     if(g.userData.crystal){ const cr=g.userData.crystal; cr.material.emissiveIntensity=2.6+Math.sin(t*3+tw.x)*1.1; cr.rotation.y=t*0.8; cr.position.y=2.95+Math.sin(t*1.6+tw.x)*0.06; }
     if(g.userData.aaRings){ const R=g.userData.aaRings; for(let i=0;i<R.length;i++){ R[i].rotation.z=t*(0.9+i*0.7)*(i%2?-1:1); } }
     if(g.userData.brew){ g.userData.brew.material.emissiveIntensity=1.4+Math.sin(t*4)*0.5; }
@@ -1621,7 +1644,7 @@ $('bBack').onclick=()=>{ try{ if(NET.peer) NET.peer.destroy(); }catch(e){} NET={
 function hideLoader(){ if(assetsReady) return; assetsReady=true; if(_loaderPoll) clearInterval(_loaderPoll);
   const el=document.getElementById('loader'); if(el){ el.style.opacity='0'; setTimeout(()=>{ el.style.display='none'; },650); }
   if(_pendingStart){ _pendingStart=false; resetGame(); } }
-function assetsAllLoaded(){ try{ return Object.keys(ENV).every(k=>envCache[k]) && Object.keys(MODELS).every(k=>gltfCache[k]); }catch(e){ return false; } }
+function assetsAllLoaded(){ try{ return Object.keys(ENV).every(k=>envCache[k]) && Object.keys(MODELS).every(k=>gltfCache[k]) && Object.keys(GEN_TOWER).every(k=>genCache[k]); }catch(e){ return false; } }
 let _loaderPoll=setInterval(()=>{ if(assetsReady){ clearInterval(_loaderPoll); return; }
   const ek=Object.keys(ENV), mk=Object.keys(MODELS);
   const e=ek.filter(k=>envCache[k]).length, m=mk.filter(k=>gltfCache[k]).length;

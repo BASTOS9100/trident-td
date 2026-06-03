@@ -15,3 +15,9 @@ models/Maw J Laygo.fbx
 models/Mutant.fbx.bak
 models/Nightshade J Friedrich.fbx
 models/Knight D Pelegrini.fbx
+
+# Modèles Meshy ORIGINAUX (lourds ~120 Mo) : gardés en local, seuls les *_opt.glb sont déployés
+models/gen/tower_arrow.glb
+models/gen/tower_cannon.glb
+models/gen/tower_aa.glb
+models/gen/tower_poison.glb
