@@ -514,15 +514,15 @@ function preloadModels(){ const L=THREE.GLTFLoader?new THREE.GLTFLoader(LOADER_M
     const tryLoad=att=>{ (fbx?F:L).load(path, ok, undefined, ()=>{ if(att<5) setTimeout(()=>tryLoad(att+1),500); else console.warn('modèle manquant après retries:',k); }); };
     tryLoad(0); } }
 // tours haute-déf (modèles Meshy optimisés, statiques → feedback d'attaque procédural)
-const GEN_TOWER={ arrow:{f:'tower_arrow_opt',h:1.85,yaw:0,aim:false,bright:2.6}, cannon:{f:'tower_cannon_opt',h:1.5,yaw:Math.PI/2,aim:true,bright:1.95}, aa:{f:'tower_aa_opt',h:1.7,yaw:Math.PI,aim:true,bright:1.0}, poison:{f:'tower_poison_opt',h:2.05,yaw:0,aim:false,bright:1.0} };
-const genCache={};
+const GEN_TOWER={ arrow:{f:'tower_arrow_opt',h:1.85,yaw:0,aim:false,bright:2.6}, cannon:{f:'tower_cannon_anim',h:1.5,yaw:Math.PI/2,aim:true,bright:1.95}, aa:{f:'tower_aa_opt',h:1.7,yaw:Math.PI,aim:true,bright:1.0}, poison:{f:'tower_poison_opt',h:2.05,yaw:0,aim:false,bright:1.0} };
+const genCache={}, genAnims={};
 function loadGenTowers(){ if(!THREE.GLTFLoader) return; const L=new THREE.GLTFLoader(LOADER_MGR||undefined), V=new THREE.Vector3();
   for(const k in GEN_TOWER){ const cfg=GEN_TOWER[k];
     const tryLoad=att=>{ L.load('models/gen/'+cfg.f+'.glb', g=>{ const sc=g.scene;
       sc.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; if(o.material) o.material.envMapIntensity=0.85; } });
       let box=new THREE.Box3().setFromObject(sc); let sz=box.getSize(V); const s=cfg.h/Math.max(sz.x,sz.y,sz.z); sc.scale.setScalar(s); sc.updateMatrixWorld(true);
       box=new THREE.Box3().setFromObject(sc); const c=box.getCenter(new THREE.Vector3()); sc.position.set(-c.x,-box.min.y,-c.z);   // base à y=0, centré XZ
-      genCache[k]=sc; tryPrewarm();
+      genCache[k]=sc; genAnims[k]=g.animations||[]; tryPrewarm();
     }, undefined, ()=>{ if(att<5) setTimeout(()=>tryLoad(att+1),500); else console.warn('tour gen manquante:',k); }); };
     tryLoad(0); } }
 let _prewarmed=false;
@@ -984,7 +984,9 @@ function make3DTower(t){
     const turret=new THREE.Group(); turret.position.y=0.05; turret.rotation.y=cfg.yaw; turret.userData.yawOff=cfg.yaw;
     const m=genCache[t.type].clone(true); turret.add(m); tintModelByLevel(m,t.level,cfg.bright);
     g.add(turret);
-    g.userData.turret=cfg.aim?turret:null;   // visée seulement ; animations d'attaque = Blender (à venir)
+    g.userData.turret=cfg.aim?turret:null;   // visée
+    // animation d'attaque (clip Blender, ex. recul du canon) jouée une fois au tir
+    if(genAnims[t.type] && genAnims[t.type].length){ const mix=new THREE.AnimationMixer(m); const act=mix.clipAction(genAnims[t.type][0]); act.setLoop(THREE.LoopOnce); act.clampWhenFinished=false; g.userData.towerMixer=mix; g.userData.fireAction=act; }
     t.obj=g; scene.add(g); return; }
   g.add(towerPlatform());
   const stone=towerStone(), wood=MAT('#5a4326',{rough:0.85}), darkwood=MAT('#3a2c1a',{rough:0.85}), iron=MAT('#2c2a28',{metal:0.85,rough:0.4}), glow=[];
@@ -1280,6 +1282,8 @@ function render3D(){
   }
   for(const tw of towers.values()){ const g=tw.obj; if(!g) continue; const tr=g.userData.turret;
     if(tr){ tr.rotation.y=Math.atan2(Math.cos(tw.aim),Math.sin(tw.aim))+(tr.userData.yawOff||0); const rec=tw.fireAnim>0?tw.fireAnim*0.3:0; if(tr.userData.barrel) tr.userData.barrel.position.z=0.32-rec; }
+    if(g.userData.towerMixer){ g.userData.towerMixer.update(rdt);
+      if(tw.fireAnim>0 && !tw._firing){ tw._firing=true; const a=g.userData.fireAction; a.reset(); a.play(); } else if(tw.fireAnim<=0 && tw._firing){ tw._firing=false; } }
     if(g.userData.crystal){ const cr=g.userData.crystal; cr.material.emissiveIntensity=2.6+Math.sin(t*3+tw.x)*1.1; cr.rotation.y=t*0.8; cr.position.y=2.95+Math.sin(t*1.6+tw.x)*0.06; }
     if(g.userData.aaRings){ const R=g.userData.aaRings; for(let i=0;i<R.length;i++){ R[i].rotation.z=t*(0.9+i*0.7)*(i%2?-1:1); } }
     if(g.userData.brew){ g.userData.brew.material.emissiveIntensity=1.4+Math.sin(t*4)*0.5; }
