@@ -514,7 +514,7 @@ function preloadModels(){ const L=THREE.GLTFLoader?new THREE.GLTFLoader(LOADER_M
     const tryLoad=att=>{ (fbx?F:L).load(path, ok, undefined, ()=>{ if(att<5) setTimeout(()=>tryLoad(att+1),500); else console.warn('modèle manquant après retries:',k); }); };
     tryLoad(0); } }
 // tours haute-déf (modèles Meshy optimisés, statiques → feedback d'attaque procédural)
-const GEN_TOWER={ arrow:{f:'tower_arrow_opt',h:1.85,yaw:0,aim:false}, cannon:{f:'tower_cannon_opt',h:1.5,yaw:0,aim:true}, aa:{f:'tower_aa_opt',h:1.7,yaw:Math.PI,aim:true}, poison:{f:'tower_poison_opt',h:2.05,yaw:0,aim:false} };
+const GEN_TOWER={ arrow:{f:'tower_arrow_opt',h:1.85,yaw:0,aim:false,bright:1.9}, cannon:{f:'tower_cannon_opt',h:1.5,yaw:-Math.PI/2,aim:true,bright:1.95}, aa:{f:'tower_aa_opt',h:1.7,yaw:Math.PI,aim:true,bright:1.0}, poison:{f:'tower_poison_opt',h:2.05,yaw:0,aim:false,bright:1.0} };
 const genCache={};
 function loadGenTowers(){ if(!THREE.GLTFLoader) return; const L=new THREE.GLTFLoader(LOADER_MGR||undefined), V=new THREE.Vector3();
   for(const k in GEN_TOWER){ const cfg=GEN_TOWER[k];
@@ -971,24 +971,24 @@ const LVLVIS=[
   {col:'#ff2a4d', ei:1.00}   // niv 4 : incandescente rouge
 ];
 // teinte les matériaux d'un modèle cloné (matériaux clonés pour ne pas affecter les autres tours)
-function tintModelByLevel(root, level){ const lv=Math.min(Math.max(level,1),4); const d=LVLVIS[lv-1];
-  const tint=mm=>{ const c=mm.clone(); c.emissive=new THREE.Color(d.col); c.emissiveIntensity=d.ei; if(d.ei>0){ c.metalness=Math.min(1,(c.metalness||0)+0.15); c.roughness=Math.max(0.15,(c.roughness??0.8)-0.15*lv/4); } return c; };
+function tintModelByLevel(root, level, bright){ const lv=Math.min(Math.max(level,1),4); const d=LVLVIS[lv-1];
+  const tint=mm=>{ const c=mm.clone(); if(bright&&bright!==1&&c.color) c.color.multiplyScalar(bright); c.emissive=new THREE.Color(d.col); c.emissiveIntensity=d.ei; if(d.ei>0){ c.metalness=Math.min(1,(c.metalness||0)+0.15); c.roughness=Math.max(0.15,(c.roughness??0.8)-0.15*lv/4); } return c; };
   root.traverse(o=>{ if(o.isMesh&&o.material&&!(o.userData&&o.userData.noTint)){ o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material); } }); }
 function rebuildTower(t){ if(t.obj) remove3D(t.obj); make3DTower(t); if(t.obj) t.obj.userData.towerKey=key(t.c,t.r); }
 function make3DTower(t){
   const b=TOWERS[t.type], g=new THREE.Group(); g.position.set(t.x/CELL,TOP,t.y/CELL);
   const pc=(PLAYERS[t.player]||PLAYERS[0]).color;
-  const ownRing=new THREE.Mesh(new THREE.TorusGeometry(0.48,0.055,8,24), MAT(pc,{emissive:pc,ei:1.4})); ownRing.rotation.x=-Math.PI/2; ownRing.position.y=0.06; ownRing.userData.noTint=true; g.add(ownRing);
-  g.add(towerPlatform());
-  // ---- tours haute-déf (modèles Meshy) si chargées ----
+  const ownRing=new THREE.Mesh(new THREE.TorusGeometry(0.48,0.055,8,24), MAT(pc,{emissive:pc,ei:1.4})); ownRing.rotation.x=-Math.PI/2; ownRing.position.y=0.05; ownRing.userData.noTint=true; g.add(ownRing);
+  // ---- tours haute-déf (modèles Meshy) si chargées — posées directement au sol, sans socle ----
   if(genCache[t.type]){ const cfg=GEN_TOWER[t.type];
-    const turret=new THREE.Group(); turret.position.y=0.36; turret.rotation.y=cfg.yaw; turret.userData.yawOff=cfg.yaw;
-    const m=genCache[t.type].clone(true); turret.add(m); tintModelByLevel(m,t.level);
+    const turret=new THREE.Group(); turret.position.y=0.05; turret.rotation.y=cfg.yaw; turret.userData.yawOff=cfg.yaw;
+    const m=genCache[t.type].clone(true); turret.add(m); tintModelByLevel(m,t.level,cfg.bright);
     const flash=new THREE.Mesh(new THREE.SphereGeometry(0.16,12,10), new THREE.MeshBasicMaterial({color:new THREE.Color(b.color),transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
-    flash.position.set(0, cfg.h*0.55, cfg.h*0.55); flash.userData.noTint=true; turret.add(flash);
+    flash.position.set(0, cfg.h*0.5, cfg.h*0.55); flash.userData.noTint=true; turret.add(flash);
     g.add(turret);
-    g.userData.turret=cfg.aim?turret:null; g.userData.gmdl=turret; g.userData.gmdlY=0.36; g.userData.flash=flash;
+    g.userData.turret=cfg.aim?turret:null; g.userData.gmdl=turret; g.userData.gmdlY=0.05; g.userData.flash=flash;
     t.obj=g; scene.add(g); return; }
+  g.add(towerPlatform());
   const stone=towerStone(), wood=MAT('#5a4326',{rough:0.85}), darkwood=MAT('#3a2c1a',{rough:0.85}), iron=MAT('#2c2a28',{metal:0.85,rough:0.4}), glow=[];
   const accent=col=>{ const m=new THREE.Mesh(new THREE.SphereGeometry(0.1,16,14), MAT(col,{emissive:col,ei:2.8,rough:0.2})); m.userData.noTint=true; return m; };
   const crenels=(rad,n,y,sz)=>{ for(let i=0;i<n;i++){ const a=i/n*6.2832; const m=new THREE.Mesh(new THREE.BoxGeometry(sz,0.2,sz),stone); m.position.set(Math.cos(a)*rad,y,Math.sin(a)*rad); m.castShadow=true; g.add(m); } };
