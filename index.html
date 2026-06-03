@@ -514,7 +514,7 @@ function preloadModels(){ const L=THREE.GLTFLoader?new THREE.GLTFLoader(LOADER_M
     const tryLoad=att=>{ (fbx?F:L).load(path, ok, undefined, ()=>{ if(att<5) setTimeout(()=>tryLoad(att+1),500); else console.warn('modèle manquant après retries:',k); }); };
     tryLoad(0); } }
 // tours haute-déf (modèles Meshy optimisés, statiques → feedback d'attaque procédural)
-const GEN_TOWER={ arrow:{f:'tower_arrow_opt',h:1.85,yaw:0,aim:false,bright:1.9}, cannon:{f:'tower_cannon_opt',h:1.5,yaw:Math.PI/2,aim:true,bright:1.95}, aa:{f:'tower_aa_opt',h:1.7,yaw:Math.PI,aim:true,bright:1.0}, poison:{f:'tower_poison_opt',h:2.05,yaw:0,aim:false,bright:1.0} };
+const GEN_TOWER={ arrow:{f:'tower_arrow_opt',h:1.85,yaw:0,aim:false,bright:2.6}, cannon:{f:'tower_cannon_opt',h:1.5,yaw:Math.PI/2,aim:true,bright:1.95}, aa:{f:'tower_aa_opt',h:1.7,yaw:Math.PI,aim:true,bright:1.0}, poison:{f:'tower_poison_opt',h:2.05,yaw:0,aim:false,bright:1.0} };
 const genCache={};
 function loadGenTowers(){ if(!THREE.GLTFLoader) return; const L=new THREE.GLTFLoader(LOADER_MGR||undefined), V=new THREE.Vector3();
   for(const k in GEN_TOWER){ const cfg=GEN_TOWER[k];
