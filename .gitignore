@@ -24,3 +24,6 @@ models/gen/tower_poison.glb
 
 # Creeps : exports bruts/full-res Meshy (lourds ~90 Mo) — seuls les .glb optimisés sont déployés
 models/_*.glb
+
+# Outils d'optimisation locale (node_modules, scripts) — non déployés
+models/_opt/

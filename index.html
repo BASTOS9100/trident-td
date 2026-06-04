@@ -431,13 +431,14 @@ const TYPES={
   raider:{mult:0.5,speed:104,col:'#9aa0ac',r:9,fly:false,shape:'wolf',armorK:0,count:34},
   golem:{mult:1.6,speed:40,col:'#8b8f7a',r:13,fly:false,shape:'golem',armorK:0.3,count:18},
   gargoyle:{mult:1.0,speed:62,col:'#9a7fb8',r:11,fly:true,shape:'gargoyle',armorK:0,count:26},
+  troll:{mult:0.95,speed:50,col:'#7d8a5a',r:10,fly:false,shape:'troll',armorK:0.05,count:16},
   imp:{mult:0.32,speed:80,col:'#c8492f',r:7,fly:false,shape:'imp',armorK:0,count:48},
   ogre:{mult:2.5,speed:34,col:'#7d8a4a',r:16,fly:false,shape:'ogre',armorK:0.22,count:10},
   boss:{mult:12,speed:24,col:'#cf3a38',r:22,fly:false,shape:'boss',armorK:0.85,count:1},
 };
 const ROT=['grunt','imp','raider','golem','gargoyle','ogre','grunt','gargoyle','golem','imp'];
 function waveSpec(w){
-  let type=(w===1)?'sheep':(w===2)?'direwolf':(w===3)?'peasant':(w===4)?'orc':(w%10===0)?'boss':ROT[(w-1)%ROT.length]; const cfg=TYPES[type];
+  let type=(w===1)?'sheep':(w===2)?'direwolf':(w===3)?'peasant':(w===4)?'orc':(w===5)?'gargoyle':(w===6)?'troll':(w%10===0)?'boss':ROT[(w-1)%ROT.length]; const cfg=TYPES[type];
   const fly=type==='boss'?(w===40):cfg.fly;
   // difficulté nettement supérieure ET croissante : PV exponentiels, armure + effectifs + vitesse qui montent avec la vague
   const isB=(type==='boss');
@@ -659,7 +660,8 @@ const MODELS={
   wolf:    {file:'Rogue_Hooded.glb',     scale:0.87, yaw:Math.PI, y:0, clip:'Running_A'},
   golem:   {file:'Knight.glb',           scale:0.76, yaw:Math.PI, y:0, clip:'Walking_A'},
   ogre:    {file:'Mutant.fbx',           scale:0.0115,yaw:Math.PI, y:0, rig:'mixamo', spd:7},
-  gargoyle:{file:'Skeleton_Mage.glb',    scale:0.66, yaw:Math.PI, y:0, clip:'Idle'},
+  gargoyle:{file:'gargoyle.glb',          scale:0.9,  yaw:Math.PI, y:0.0, clip:'Fly', bright:0.9, env:0.5},
+  troll:   {file:'troll.glb',             scale:0.70, yaw:Math.PI, y:0.0, clip:'Armature|walking_man|baselayer', bright:0.95, env:0.5},
   boss:    {file:'Warrok W Kurniawan.fbx',scale:0.0082,yaw:Math.PI, y:0, rig:'mixamo', spd:5},
   sheep:   {file:'sheep.glb',             scale:0.6, yaw:Math.PI, y:0.50, clip:'Walk', bright:0.6, env:0.4, rough:0.2},
   direwolf:{file:'wolf.glb',              scale:0.8, yaw:Math.PI, y:0.49, clip:'Walk', bright:0.82, env:0.5},
@@ -668,18 +670,18 @@ const MODELS={
 };
 const gltfCache={};
 function preloadModels(){ const L=THREE.GLTFLoader?new THREE.GLTFLoader(LOADER_MGR||undefined):null; const F=THREE.FBXLoader?new THREE.FBXLoader(LOADER_MGR||undefined):null;
-  for(const k in MODELS){ const cfg=MODELS[k]; const path='models/'+cfg.file; const fbx=/\.fbx$/i.test(cfg.file);
+  for(const k in MODELS){ const cfg=MODELS[k]; const path='models/'+cfg.file+'?v=3'; const fbx=/\.fbx$/i.test(cfg.file);
     if(fbx&&!F) continue; if(!fbx&&!L) continue;
     const tint=(scene)=>{ if(cfg.bright==null&&cfg.env==null&&cfg.rough==null) return; scene.traverse(o=>{ if(o.isMesh&&o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ if(cfg.bright!=null&&m.color) m.color.multiplyScalar(cfg.bright); if(cfg.env!=null) m.envMapIntensity=cfg.env; if(cfg.rough!=null) m.roughness=Math.min(1,(m.roughness||0.8)+cfg.rough); m.emissiveIntensity=0; }); } }); };
     const ok=fbx?(obj=>{ gltfCache[k]={scene:obj, animations:obj.animations||[]}; tint(obj); tryPrewarm(); }):(g=>{ gltfCache[k]=g; tint(g.scene); tryPrewarm(); });
     const tryLoad=att=>{ (fbx?F:L).load(path, ok, undefined, ()=>{ if(att<5) setTimeout(()=>tryLoad(att+1),500); else console.warn('modèle manquant après retries:',k); }); };
     tryLoad(0); } }
 // tours haute-déf (modèles Meshy optimisés, statiques → feedback d'attaque procédural)
-const GEN_TOWER={ arrow:{f:'tower_arrow_anim',h:1.85,yaw:0,aim:false,bright:2.6}, cannon:{f:'tower_cannon_anim',h:1.5,yaw:Math.PI/2,aim:true,bright:1.95}, aa:{f:'tower_aa_anim',h:1.7,yaw:Math.PI,aim:false,bright:1.0}, poison:{f:'tower_poison_anim',h:2.05,yaw:0,aim:false,bright:1.0} };
+const GEN_TOWER={ arrow:{f:'tower_arrow_anim',h:1.85,yaw:0,aim:false,bright:2.6}, cannon:{f:'tower_cannon_anim',h:1.5,yaw:Math.PI/2,aim:true,bright:1.95}, aa:{f:'tower_aa_anim',h:1.6,yaw:Math.PI,aim:false,bright:1.0}, poison:{f:'tower_poison_anim',h:2.05,yaw:0,aim:false,bright:1.0} };
 const genCache={}, genAnims={};
 function loadGenTowers(){ if(!THREE.GLTFLoader) return; const L=new THREE.GLTFLoader(LOADER_MGR||undefined), V=new THREE.Vector3();
   for(const k in GEN_TOWER){ const cfg=GEN_TOWER[k];
-    const tryLoad=att=>{ L.load('models/gen/'+cfg.f+'.glb', g=>{ const sc=g.scene;
+    const tryLoad=att=>{ L.load('models/gen/'+cfg.f+'.glb?v=3', g=>{ const sc=g.scene;
       sc.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; if(o.material) o.material.envMapIntensity=0.85; } });
       let box=new THREE.Box3().setFromObject(sc); let sz=box.getSize(V); const s=cfg.h/Math.max(sz.x,sz.y,sz.z); sc.scale.setScalar(s); sc.updateMatrixWorld(true);
       box=new THREE.Box3().setFromObject(sc); const c=box.getCenter(new THREE.Vector3()); sc.position.set(-c.x,-box.min.y,-c.z);   // base à y=0, centré XZ
@@ -736,13 +738,27 @@ const ENV={ castle:'building_castle_blue', towerA:'building_tower_A_blue', tower
   hillA:'hill_single_A', hillB:'hill_single_B', hillC:'hill_single_C', mtnA:'mountain_A_grass_trees', mtnB:'mountain_B_grass_trees', mtnC:'mountain_C_grass_trees' };
 const TOWER_MODEL={ arrow:{k:'towerA',accY:1.7}, cannon:{k:'catapult',accY:1.3}, aa:{k:'towerB',accY:2.0}, poison:{k:'blacksmith',accY:1.4} };
 let ENV_BS=1.4, ENV_NS=1.5, TOWER_SCALE=0.72, CASTLE_SCALE=1.3, ENV_Y=-0.5;
-function loadEnv(){ if(!THREE.GLTFLoader) return; const L=new THREE.GLTFLoader(LOADER_MGR||undefined); const keys=Object.keys(ENV); let n=keys.length;
+// arbres Meshy texturés : normalise (base au sol, centré XZ, hauteur cible) dans un groupe racine pour l'instanciation
+const decorTreeCache={};
+const DECOR_TREES=[['treeBig','treeA.glb',9.5],['treeStd','treeB.glb',4.8]];
+function normalizeTreeModel(scene,targetH){ const box=new THREE.Box3().setFromObject(scene); const h=(box.max.y-box.min.y)||1, s=targetH/h, cx=(box.min.x+box.max.x)/2, cz=(box.min.z+box.max.z)/2;
+  scene.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; if(o.material){ o.material.envMapIntensity=0.5; if(o.material.map) o.material.map.anisotropy=4; } } });
+  const g=new THREE.Group(); g.add(scene); scene.position.set(-cx,-box.min.y,-cz); g.scale.setScalar(s); g.updateMatrixWorld(true); return g; }
+function loadEnv(){ if(!THREE.GLTFLoader) return; const L=new THREE.GLTFLoader(LOADER_MGR||undefined); const keys=Object.keys(ENV); let n=keys.length+DECOR_TREES.length+1;
   const done=()=>{ if(--n===0) onEnvReady(); };
+  // château Meshy (base) — modèle brut, scale/position gérés dans buildCastle
+  (function(){ const tl=att=>{ L.load('models/castle.glb?v=2',
+    g=>{ g.scene.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; if(o.material) o.material.envMapIntensity=0.7; } }); decorTreeCache.castleM=g.scene; done(); }, undefined,
+    ()=>{ if(att<5){ setTimeout(()=>tl(att+1),500); } else { console.warn('château manquant'); done(); } }); }; tl(0); })();
   const tryLoad=(k,att)=>{ L.load('models/hex/'+ENV[k]+'.gltf',
     g=>{ g.scene.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); envCache[k]=g.scene; done(); },
     undefined,
     ()=>{ if(att<5){ setTimeout(()=>tryLoad(k,att+1), 500); } else { console.warn('décor manquant après retries:',k); done(); } }); };
-  keys.forEach(k=>tryLoad(k,0)); }
+  keys.forEach(k=>tryLoad(k,0));
+  // arbres Meshy (décor) — ?v= = anti-cache (force le rechargement quand les modèles changent)
+  DECOR_TREES.forEach(([k,f,th])=>{ const tl=att=>{ L.load('models/'+f+'?v=7',
+    g=>{ decorTreeCache[k]=normalizeTreeModel(g.scene,th); done(); }, undefined,
+    ()=>{ if(att<5){ setTimeout(()=>tl(att+1),500); } else { console.warn('arbre Meshy manquant:',k); done(); } }); }; tl(0); }); }
 function envClone(k){ return envCache[k]? envCache[k].clone(true):null; }
 // putEnv COLLECTE les placements ; buildDecorInstances() construit ensuite des InstancedMesh par modèle
 // → mêmes géométries/matériaux (visuel IDENTIQUE) mais une poignée de draw calls au lieu de ~1300.
@@ -771,26 +787,52 @@ function buildDecorInstances(){
 function onEnvReady(){ envReady=true; rebuildCastle(); placeVillage(); rebuildAllVisuals(); tryPrewarm(); }
 function rebuildCastle(){ if(CASTLE) remove3D(CASTLE); buildCastle(); }   // château procédural grandiose (plus le modèle KayKit enfantin)
 function placeVillage(){
-  _seed=4242; SWAMP_TREES.length=0; SWAMP_ROCKS.length=0;
-  const onLand=(x,z)=>{ const c=Math.floor(x),r=Math.floor(z); if(cellType(c,r)!=='void') return false; return Math.hypot(x-COLS/2,z-ROWS/2)>7; };
-  // village derrière/autour de la base
-  const town=['homeA','homeB','homeA','homeB','church','market','tavern','well','windmill','watermill','blacksmith','barracks','homeA','homeB','homeA'];
-  let p=0,tries=0; while(p<town.length && tries<800){ tries++; const x=COLS/2+(srand()*44-22), z=ROWS+1+srand()*12; if(!onLand(x,z)) continue; putEnv(town[p],x,z,ENV_BS,srand()*6.28); p++; }
-  // ruines éparses (carte ravagée par la horde)
-  for(let i=0;i<8;i++){ const x=srand()*110-28,z=srand()*100-27; if(!onLand(x,z)){i--;if(i<-20)break;continue;} putEnv('destroyed',x,z,ENV_BS*0.9,srand()*6.28); }
-  // forêt dense
-  const trees=['treeA','treeB','treesAM','treesAL','treesBM','treesBL'];
-  let tp=0,tt=0; while(tp<240 && tt<6000){ tt++; const x=srand()*114-30, z=srand()*104-29; if(!onLand(x,z)) continue; if(Math.hypot(x-COLS/2,z-ROWS/2)<11) continue;
-    putEnv(trees[(srand()*trees.length)|0],x,z,ENV_NS*(0.8+srand()*0.7),srand()*6.28); tp++; }
-  // rochers
-  for(let i=0;i<75;i++){ const x=srand()*114-30,z=srand()*104-29; if(!onLand(x,z))continue; putEnv(['rockA','rockB','rockC','rockD','rockE'][(srand()*5)|0],x,z,ENV_NS*(0.7+srand()*0.7),srand()*6.28); }
-  // collines
-  for(let i=0;i<22;i++){ const x=srand()*114-30,z=srand()*104-29; if(!onLand(x,z))continue; putEnv(['hillA','hillB','hillC'][(srand()*3)|0],x,z,ENV_NS,srand()*6.28,-0.6); }
-  // montagnes en fond (anneau lointain)
-  for(let i=0;i<32;i++){ const a=i/32*6.28+srand()*0.2, d=60+srand()*12; putEnv(['mtnA','mtnB','mtnC'][(srand()*3)|0],COLS/2+Math.cos(a)*d,ROWS/2+Math.sin(a)*d,ENV_NS*1.8,srand()*6.28,-0.7); }
-  decorateInterior();
-  buildDecorInstances();   // → instancie tout le décor collecté
-  buildSwampFlora();       // → arbres morts + champignons luminescents + roseaux + nénuphars
+  _seed=4242; SWAMP_TREES.length=0; SWAMP_ROCKS.length=0; DECOR_PLACEMENTS.length=0;
+  buildDecorInstances();   // no-op (aucun placement collecté)
+  placeTrees();            // arbres Meshy posés sur le relief, intégrés naturellement
+}
+// assombrit une fois les matériaux d'un modèle d'arbre (feuillage + tronc) — feuillage « un peu plus foncé »
+function _darkenTree(root,f){ root.traverse(o=>{ if(o.isMesh&&o.material){ const ms=Array.isArray(o.material)?o.material:[o.material]; ms.forEach(m=>{ if(m&&m.color&&!m.userData._dk){ m.color.multiplyScalar(f); m.userData._dk=true; m.envMapIntensity=0.4; } }); } }); }
+// instancie un modèle d'arbre (treeStd/treeBig) à une liste de placements, en suivant le relief
+function _instTree(root, arr){ if(!root||!arr.length) return; root.updateMatrixWorld(true); const rootInv=root.matrixWorld.clone().invert();
+  const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sv=new THREE.Vector3(),pv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0),rel=new THREE.Matrix4(),fin=new THREE.Matrix4();
+  root.traverse(node=>{ if(!node.isMesh||!node.geometry) return; rel.multiplyMatrices(rootInv,node.matrixWorld);
+    const im=new THREE.InstancedMesh(node.geometry,node.material,arr.length); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;   // pas d'ombre projetée (perf à l'échelle d'une forêt)
+    arr.forEach((p,k)=>{ sv.set(p.s,p.s,p.s); q.setFromAxisAngle(up,p.yaw); pv.set(p.x,p.y,p.z); m4.compose(pv,q,sv); fin.multiplyMatrices(m4,rel); im.setMatrixAt(k,fin); });
+    im.instanceMatrix.needsUpdate=true; scene.add(im); }); }
+// PETITES FORÊTS / BOSQUETS : treeB + treeA mélangés, petits arbres, posés sur le relief (zéro socle), + arbres autour des lanes
+function placeTrees(){
+  const stdRoot=decorTreeCache.treeStd, bigRoot=decorTreeCache.treeBig; if(!stdRoot) return;
+  _darkenTree(stdRoot,0.7); if(bigRoot) _darkenTree(bigRoot,0.7);
+  const cx=COLS/2, cz=ROWS/2; _seed=7411;
+  const Bset=[], Aset=[];   // placements treeB (petits) / treeA (feuillu)
+  const add=(x,z,sinkB,sinkA,pA)=>{ const useA=bigRoot && srand()<(pA==null?0.25:pA);   // mélange treeA (feuillu) / treeB
+    if(useA) Aset.push({x,z,y:terrainHeightAt(x,z)-sinkA, s:0.34+srand()*0.22, yaw:srand()*6.28});
+    else     Bset.push({x,z,y:terrainHeightAt(x,z)-sinkB, s:0.55+srand()*0.5, yaw:srand()*6.28}); };
+  // BOSQUETS dispersés « par endroits » (plus nombreux + plus denses) — concentrés dans la zone visible autour du trident
+  let groves=0,tries=0;
+  while(groves<40 && tries<4000){ tries++;
+    const ang=srand()*6.28, dist=9+Math.pow(srand(),1.3)*44, GX=cx+Math.cos(ang)*dist, GZ=cz+Math.sin(ang)*dist;
+    if(laneDistAt(GX,GZ)<4) continue;
+    const rad=2.5+srand()*5, nT=7+(srand()*10|0);               // densité du bosquet ++
+    for(let k=0;k<nT;k++){ const a=srand()*6.28, rr=Math.pow(srand(),0.7)*rad, x=GX+Math.cos(a)*rr, z=GZ+Math.sin(a)*rr;
+      if(laneDistAt(x,z)<3.2) continue; add(x,z,0.25,0.3,0.25); }
+    groves++; }
+  // BEAUCOUP plus d'arbres autour ET entre les lanes (petits, bien intégrés)
+  let nn=0,nt=0;
+  while(nn<90 && nt<7000){ nt++; const ang=srand()*6.28, dist=7+srand()*26, x=cx+Math.cos(ang)*dist, z=cz+Math.sin(ang)*dist; const ld=laneDistAt(x,z);
+    if(ld<2.4||ld>9.5) continue; add(x,z,0.2,0.25,0.16); nn++; }
+  // VRAIE FORÊT DENSE autour du trident (zone visible) + dégradé vers le loin — piloté par bruit (massifs + clairières)
+  let placed=0, pt=0;
+  while(placed<1700 && pt<30000){ pt++;
+    const ang=srand()*6.28, d=8+Math.pow(srand(),1.5)*60;            // concentré près/moyen (médiane ~25), peu au loin
+    const x=cx+Math.cos(ang)*d, z=cz+Math.sin(ang)*d;
+    if(laneDistAt(x,z)<3) continue;                                  // jamais sur/contre les lanes
+    const forest=_fbm(x*0.035+50, z*0.035+50);                       // densité de forêt (0..1)
+    if(srand() > 0.4+forest*forest) continue;                        // base dense + massifs touffus
+    add(x,z,0.22,0.28,0.16); placed++; }
+  _instTree(stdRoot, Bset);
+  _instTree(bigRoot, Aset);
 }
 // habille les poches de vide qui bordent les lanes : rochers, buissons, amas — SANS toucher les cases jouables
 function decorateInterior(){ _seed=8123;
@@ -882,18 +924,46 @@ function buildAtmosphereFX(){ const spr=_softSprite();
   const N=200, pos=new Float32Array(N*3), vel=new Float32Array(N); for(let i=0;i<N;i++){ pos[i*3]=COLS/2+(srnd()-0.5)*105; pos[i*3+1]=srnd()*15; pos[i*3+2]=ROWS/2+(srnd()-0.5)*95; vel[i]=0.25+srnd()*0.55; }
   const eg=new THREE.BufferGeometry(); eg.setAttribute('position',new THREE.BufferAttribute(pos,3)); eg.userData={vel};
   EMBERS=new THREE.Points(eg, new THREE.PointsMaterial({map:spr,color:new THREE.Color('#7fe06a'),size:0.3,transparent:true,opacity:0.62,depthWrite:false,blending:THREE.AdditiveBlending})); EMBERS.frustumCulled=false; scene.add(EMBERS); }   // feux follets verts qui montent
-function buildWorld(){
-  // grand terrain herbeux environnant
-  const ground=new THREE.Mesh(new THREE.PlaneGeometry(260,260), grassPBR(42));
-  ground.rotation.x=-Math.PI/2; ground.position.set(COLS/2,-0.5,ROWS/2); ground.receiveShadow=true; scene.add(ground);
-  // étang réfléchissant avec ondulations animées
-  const rc=document.createElement('canvas'); rc.width=rc.height=128; const rx=rc.getContext('2d');
-  for(let y=0;y<128;y++)for(let x=0;x<128;x++){ const v=0.5+0.25*Math.sin(x*0.25)+0.25*Math.sin(y*0.21+x*0.07); const g=(v*255)|0; rx.fillStyle='rgb('+g+','+g+','+g+')'; rx.fillRect(x,y,1,1); }
-  WATER_N=heightToNormal(rc,2.0); WATER_N.repeat.set(3,3);
-  const pond=new THREE.Mesh(new THREE.CircleGeometry(9,40),
-    new THREE.MeshStandardMaterial({color:'#13301c', roughness:0.34, metalness:0.3, transparent:true, opacity:0.93, envMapIntensity:0.8, normalMap:WATER_N, emissive:'#0c2412', emissiveIntensity:0.35}));
-  pond.rotation.x=-Math.PI/2; pond.position.set(COLS/2-34,-0.46,ROWS/2+22); scene.add(pond); WATER=pond;
-}
+// ---- bruit lisse (value noise + fbm) pour un relief naturel, déterministe (multi-OK) ----
+function _vnoise(x,z){ const xi=Math.floor(x), zi=Math.floor(z), xf=x-xi, zf=z-zi;
+  const h=(i,j)=>{ const n=Math.sin(i*127.1+j*311.7)*43758.5453; return n-Math.floor(n); };
+  const u=xf*xf*(3-2*xf), v=zf*zf*(3-2*zf);
+  const a=h(xi,zi), b=h(xi+1,zi), c=h(xi,zi+1), d=h(xi+1,zi+1);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+function _fbm(x,z){ let s=0,amp=0.5,f=1; for(let o=0;o<4;o++){ s+=amp*_vnoise(x*f,z*f); f*=2.0; amp*=0.5; } return s; }
+function _sstep(a,b,t){ t=Math.max(0,Math.min(1,(t-a)/(b-a))); return t*t*(3-2*t); }
+function buildWorld(){ buildTerrain(); WATER=null; }
+// champ de distance aux lanes (BFS) — sert à aplatir le terrain ET à écarter le décor des lanes
+let _laneField=null;
+function buildLaneField(){ const W=COLS,H=ROWS,INF=1e9, fld=new Float32Array(W*H); fld.fill(INF);
+  const q=[]; for(let r=0;r<H;r++)for(let c=0;c<W;c++){ const t=cellType(c,r); if(t==='build'||t==='base'){ fld[r*W+c]=0; q.push(r*W+c); } }
+  let head=0; while(head<q.length){ const idx=q[head++], cc=idx%W, rr=(idx/W)|0, d=fld[idx];
+    const nb=[[cc-1,rr],[cc+1,rr],[cc,rr-1],[cc,rr+1]];
+    for(const e of nb){ const nc=e[0],nr=e[1]; if(nc<0||nr<0||nc>=W||nr>=H) continue; const ni=nr*W+nc; if(fld[ni]>d+1){ fld[ni]=d+1; q.push(ni); } } }
+  _laneField={fld,W,H}; }
+function laneDistAt(X,Z){ if(!_laneField) buildLaneField(); const f=_laneField; const c=Math.floor(X), r=Math.floor(Z); if(c<0||r<0||c>=f.W||r>=f.H) return 60; const v=f.fld[r*f.W+c]; return v>=1e9?60:v; }
+// hauteur du terrain (monde) en (X,Z) — réutilisable pour poser le décor sur les collines
+function terrainHeightAt(X,Z){ const base=-0.5;
+  const wx=X+(_fbm(X*0.017+11, Z*0.017+11)-0.5)*26, wz=Z+(_fbm(X*0.017+23, Z*0.017+23)-0.5)*26;   // domain warp → organique
+  const ld=laneDistAt(X,Z);
+  const ldW=ld+(_fbm(X*0.045+2, Z*0.045+2)-0.5)*16;                 // frontière plat/collines ondulée
+  let amp=_sstep(3,13, ldW); if(ld<3) amp=0;                        // cœur plat garanti au-dessus des lanes
+  let ramp=_sstep(3,20, ldW)*3.0; if(ld<3) ramp=0;                  // remontée générale (vallée)
+  const patch=_vnoise(wx*0.012+5.5, wz*0.012+5.5), pmask=_sstep(0.26,0.56,patch);
+  const hills=(_fbm(wx*0.03, wz*0.03)-0.5)*2.0*5.2*pmask;
+  const micro=(_fbm(wx*0.08+9, wz*0.08+9)-0.5)*1.1;
+  return base + ramp + (hills+micro)*amp; }
+// TERRAIN VALLONNÉ : plan subdivisé déplacé par terrainHeightAt → collines naturelles, normales lissées (zéro arête)
+function buildTerrain(){ buildLaneField();
+  const cx=COLS/2, cz=ROWS/2, base=-0.5, SIZE=320, SEG=200;
+  const geo=new THREE.PlaneGeometry(SIZE,SIZE,SEG,SEG); geo.rotateX(-Math.PI/2);
+  const pos=geo.attributes.position, colA=new Float32Array(pos.count*3);
+  for(let i=0;i<pos.count;i++){ const X=cx+pos.getX(i), Z=cz+pos.getZ(i); const wy=terrainHeightAt(X,Z), y=wy-base; pos.setY(i,y);
+    const lift=0.5+0.5*Math.max(-1,Math.min(1,y*0.22));            // teinte par hauteur (sommets clairs/secs, creux sombres)
+    colA[i*3]=0.9+lift*0.16; colA[i*3+1]=0.95+lift*0.1; colA[i*3+2]=0.86-lift*0.12; }
+  geo.setAttribute('color', new THREE.BufferAttribute(colA,3)); geo.computeVertexNormals();
+  const mat=grassPBR(58); mat.vertexColors=true; mat.color=new THREE.Color('#86a350'); mat.envMapIntensity=0.85; mat.emissive=new THREE.Color('#1c2814'); mat.emissiveIntensity=0.12;
+  const ground=new THREE.Mesh(geo, mat); ground.position.set(cx, base, cz); ground.receiveShadow=true; ground.frustumCulled=false; scene.add(ground); }
 let WATER;
 function groundSurface(cells, mat, y, uvs, tintFn){
   const N=cells.length, pos=new Float32Array(N*12), uv=new Float32Array(N*8), nor=new Float32Array(N*12), colA=new Float32Array(N*12), idx=new Array(N*6);
@@ -954,9 +1024,9 @@ function buildBoard(){
     for(let i=0;i<b.M.length;i++) im.setMatrixAt(i,b.M[i]); im.instanceMatrix.needsUpdate=true; scene.add(im); }
   // GRANDS PORTAILS MAGIQUES (portes d'invocation) — d'où surgit la horde
   for(const s of ALL_SPAWNS) makePortalGate(s);
-  buildBorderProps();   // lanternes spectrales + totems le long des contours du trident
-  buildAtmosphere();
+  buildBorderProps();   // contour épuré : capstones + aura uniquement (reset)
   buildCastle();
+  // buildAtmosphere() (braséros) RETIRÉ — reset décor
 }
 const SPAWN_OBJ=[], BRAZIERS=[];
 function makeBrazier(x,z){ const g=new THREE.Group(); g.position.set(x,TOP,z); const ADD=THREE.AdditiveBlending;
@@ -1037,41 +1107,12 @@ function buildBorderProps(){ _seed=3300;
     const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sv=new THREE.Vector3(),pv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
     border.forEach((b,i)=>{ const x=b.c+0.5+b.dc*0.46, z=b.r+0.5+b.dr*0.46, s=1.0+srand()*0.4; sv.set(s,s,s); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,TOP+0.04,z); m4.compose(pv,q,sv); ai.setMatrixAt(i,m4); });
     ai.instanceMatrix.needsUpdate=true; scene.add(ai); AURA_GLOW.push({mesh:am,ph:srand()*6.28}); }
-  // lanternes spectrales (poteau + orbe vert émissif) — décor + glow, sans coût de lumière
-  const lant=[]; for(let i=0;i<border.length;i+=4) lant.push(border[i]);
-  if(lant.length){ const postG=new THREE.CylinderGeometry(0.045,0.075,0.95,6); postG.translate(0,0.475,0);
-    const armG=new THREE.BoxGeometry(0.035,0.035,0.3); armG.translate(0,0.92,0.15);
-    const orbG=new THREE.SphereGeometry(0.11,10,8); orbG.translate(0,0.9,0.28);
-    const postM=MAT('#231b13',{rough:0.92}), orbM=new THREE.MeshStandardMaterial({color:'#0c2a1c',emissive:'#56ffac',emissiveIntensity:2.6,roughness:0.5});
-    const pi=new THREE.InstancedMesh(postG,postM,lant.length), ai=new THREE.InstancedMesh(armG,postM,lant.length), oi=new THREE.InstancedMesh(orbG,orbM,lant.length);
-    pi.castShadow=true; const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sv=new THREE.Vector3(1,1,1),pv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
-    lant.forEach((b,i)=>{ const x=b.c+0.5-b.dc*0.42, z=b.r+0.5-b.dr*0.42; q.setFromAxisAngle(up,Math.atan2(b.dc,b.dr)); pv.set(x,TOP,z); m4.compose(pv,q,sv); pi.setMatrixAt(i,m4); ai.setMatrixAt(i,m4); oi.setMatrixAt(i,m4); });
-    pi.instanceMatrix.needsUpdate=ai.instanceMatrix.needsUpdate=oi.instanceMatrix.needsUpdate=true; scene.add(pi); scene.add(ai); scene.add(oi); }
-  // CAPSTONES : pierres déformées irrégulières sur le sommet des murs (relief, casse l'aspect cubique)
+  // CAPSTONES : pierres déformées irrégulières sur le sommet des murs (relief du contour, casse l'aspect cubique)
   { const capMat=mossStoneMat(), cg=[rockGeo(8),rockGeo(9)], ci=[new THREE.InstancedMesh(cg[0],capMat,border.length),new THREE.InstancedMesh(cg[1],capMat,border.length)], cc=[0,0];
     const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sv=new THREE.Vector3(),pv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
     border.forEach((b,i)=>{ const vi=i%2, x=b.c+0.5+b.dc*0.5, z=b.r+0.5+b.dr*0.5, s=0.2+srand()*0.16; sv.set(s*(1+srand()*0.5),s*(0.7+srand()*0.5),s*(1+srand()*0.5)); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,0.58+srand()*0.14,z); m4.compose(pv,q,sv); ci[vi].setMatrixAt(cc[vi]++,m4); });
     ci.forEach((m,i)=>{ m.count=cc[i]; m.castShadow=true; m.receiveShadow=true; m.frustumCulled=false; m.instanceMatrix.needsUpdate=true; scene.add(m); }); }
-  // RUBBLE : éboulis au pied des murs
-  { const rbMat=rockStoneMat(), rg=rockGeo(10), N=Math.floor(border.length/2), ri=new THREE.InstancedMesh(rg,rbMat,N); let n=0;
-    const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sv=new THREE.Vector3(),pv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
-    for(let i=0;i<border.length && n<N;i+=2){ const b=border[i], x=b.c+0.5-b.dc*0.35+(srand()-0.5)*0.3, z=b.r+0.5-b.dr*0.35+(srand()-0.5)*0.3, s=0.12+srand()*0.14; sv.set(s*1.3,s*0.7,s*1.3); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,0.06,z); m4.compose(pv,q,sv); ri.setMatrixAt(n++,m4); }
-    ri.count=n; ri.castShadow=true; ri.receiveShadow=true; ri.frustumCulled=false; ri.instanceMatrix.needsUpdate=true; scene.add(ri); }
-  // SKULL-PIKES : crânes empalés aux orbites spectrales, menaçants
-  { const sstep=Math.max(5,(border.length/22)|0); let sn=0;
-    for(let i=2;i<border.length && sn<22;i+=sstep){ const b=border[i]; const gg=new THREE.Group(); gg.position.set(b.c+0.5-b.dc*0.4, TOP, b.r+0.5-b.dr*0.4); gg.rotation.y=srand()*6.28;
-      const pike=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.04,1.0+srand()*0.4,6), MAT('#241c12',{rough:0.9})); pike.position.y=0.5; pike.castShadow=true; gg.add(pike);
-      const sky=1.0+srand()*0.4, sk=new THREE.Mesh(new THREE.IcosahedronGeometry(0.13,1), MAT('#cdc6b2',{rough:0.85})); sk.scale.set(1,1.15,0.92); sk.position.y=sky; gg.add(sk);
-      const eye=new THREE.Mesh(new THREE.SphereGeometry(0.032,6,6), MAT('#06120c',{emissive:'#39e08a',ei:1.6})); eye.position.set(0.05,sky+0.01,0.1); gg.add(eye); const eye2=eye.clone(); eye2.position.x=-0.05; gg.add(eye2);
-      scene.add(gg); sn++; } }
-  // totems gravés (monolithe + crâne + rune verte) répartis sur le pourtour
-  const tstep=Math.max(6,(border.length/12)|0); let tn=0;
-  for(let i=3;i<border.length && tn<12;i+=tstep){ const b=border[i];
-    const gg=new THREE.Group(); gg.position.set(b.c+0.5-b.dc*0.62, TOP, b.r+0.5-b.dr*0.62); gg.rotation.y=Math.atan2(b.dc,b.dr)+(srand()-0.5)*0.3;
-    const mono=new THREE.Mesh(new THREE.BoxGeometry(0.42,1.6,0.42), MAT('#2a2620',{rough:0.95})); mono.position.y=0.8; mono.rotation.z=(srand()-0.5)*0.1; mono.castShadow=true; gg.add(mono);
-    const skull=new THREE.Mesh(new THREE.IcosahedronGeometry(0.15,0), MAT('#cdc6b2',{rough:0.85})); skull.position.set(0,1.62,0); skull.scale.set(1,1.12,0.9); gg.add(skull);
-    const rune=new THREE.Mesh(new THREE.TorusGeometry(0.12,0.028,8,18), MAT('#62ffb0',{emissive:'#62ffb0',ei:3.0})); rune.position.set(0,1.05,0.22); gg.add(rune);
-    scene.add(gg); tn++; }
+  // RESET : lanternes / éboulis / pieux-crânes / totems RETIRÉS (on repart de 0, contour épuré)
 }
 function buildAtmosphere(){ _seed=7777;
   // braséros flanquant le couloir central (joueur du milieu)
@@ -1082,6 +1123,16 @@ function buildAtmosphere(){ _seed=7777;
   for(const s of ALL_SPAWNS){ const dx=s.c<COLS/2?-1.2:(s.c>COLS/2?1.2:0), dz=1.4; makeBrazier(s.c+0.5+dx, s.r+0.5+dz); }
 }
 function buildCastle(){
+  const src=decorTreeCache.castleM;
+  if(src){ const G=new THREE.Group(); G.position.set(27.5,TOP,45.4); G.rotation.y=CASTLE_YAW;
+    const m=src.clone(true); m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); m.updateMatrixWorld(true);
+    let box=new THREE.Box3().setFromObject(m), sz=box.getSize(new THREE.Vector3());
+    const s=Math.min(12/(sz.x||1), 8.5/(sz.z||1)); m.scale.setScalar(s); m.updateMatrixWorld(true);   // imposant, déborde vers l'arrière (hors-map)
+    box=new THREE.Box3().setFromObject(m); const c=box.getCenter(new THREE.Vector3());
+    m.position.set(-c.x, -box.min.y, -c.z); G.add(m);                                               // base au sol, centré sur la zone de base
+    const glow=new THREE.PointLight('#ffcf8a',2.0,16); glow.position.set(0,3,0); G.add(glow);
+    scene.add(G); CASTLE=G; return; }
+  // --- fallback procédural si le modèle château n'est pas chargé ---
   const g=new THREE.Group(); g.position.set(GOAL.c+0.5,TOP,GOAL.r+0.5);
   const wall=stonePBR(0.6); wall.color=new THREE.Color('#8c8478'); wall.roughness=1; wall.envMapIntensity=0.6;
   const wallDk=stonePBR(0.6); wallDk.color=new THREE.Color('#6b6457'); wallDk.roughness=1; wallDk.envMapIntensity=0.6;
@@ -1135,7 +1186,7 @@ function buildCastle(){
   const glow=new THREE.PointLight('#ffcf8a',2.4,16); glow.position.set(0,BY+2.6,KZ); g.add(glow);
   scene.add(g); CASTLE=g;
 }
-let CASTLE;
+let CASTLE; let CASTLE_YAW=0;   // orientation du château (ajustable si la façade regarde le mauvais sens)
 function buildDecor(){
   _seed=991; const trees=new THREE.Group(), rocks=new THREE.Group();
   const foliage=[MAT('#2c4a1e',{rough:1}),MAT('#34521f',{rough:1}),MAT('#3c5a26',{rough:1})], trunk=MAT('#4a3322',{rough:1}), rock=MAT('#6b6660',{rough:0.95});
@@ -1224,6 +1275,82 @@ function rockGeo(variant){ const g=new THREE.IcosahedronGeometry(1,3), p=g.attri
     const d=0.7 + 0.30*(0.5+0.5*Math.sin(v.x*4.1+variant*1.7))*(0.5+0.5*Math.sin(v.y*3.3+v.z*2.7+variant)) + 0.13*Math.sin(v.x*9+v.y*8+v.z*7) + 0.05*Math.sin(v.x*19+v.y*17+v.z*23);
     v.multiplyScalar(d); v.y*=0.72; p.setXYZ(i,v.x,v.y,v.z); }
   g.computeVertexNormals(); return g; }
+// CANOPÉE : amas de feuillage organique (grappes d'icosphères bruitées qui se chevauchent) — donne masse + silhouette aux arbres
+function canopyGeo(variant){ _seed=4200+variant*37; const V=THREE.Vector3, parts=[];
+  const nClump=5+(srand()*3|0);
+  for(let i=0;i<nClump;i++){ const a=srand()*6.28, rd=0.3+srand()*0.75, x=Math.cos(a)*rd, z=Math.sin(a)*rd, y=(srand()-0.25)*0.55;
+    const r=0.42+srand()*0.5, g=new THREE.IcosahedronGeometry(r,1), p=g.attributes.position, v=new V();
+    for(let k=0;k<p.count;k++){ v.fromBufferAttribute(p,k); const d=0.78+0.22*Math.sin(v.x*5+v.y*4+i*1.7)+0.12*Math.sin(v.z*8+i); v.multiplyScalar(d); p.setXYZ(k,v.x,v.y*0.82,v.z); }
+    g.computeVertexNormals(); g.translate(x,y,z); parts.push(g); }
+  const gg=mergeGeos(parts); gg.computeVertexNormals(); gg.computeBoundingBox(); return gg; }
+// MOUSSE PENDANTE (style marais) : grappe de fines mèches effilées qui tombent sous la canopée
+function mossVeilGeo(){ _seed=4600; const parts=[], n=9+(srand()*6|0);
+  for(let i=0;i<n;i++){ const a=srand()*6.28, rd=0.15+srand()*0.6, x=Math.cos(a)*rd, z=Math.sin(a)*rd, len=0.45+srand()*1.0;
+    const g=new THREE.ConeGeometry(0.018+srand()*0.022, len, 4); g.translate(0,-len/2,0); g.translate(x,0,z); parts.push(g); }
+  const gg=mergeGeos(parts); return gg; }
+// CONIFÈRE (sapin, style forêt WC3) : étages de cônes effilés, feuillage jusqu'au sol
+function pineGeo(variant){ _seed=5200+variant*29; const parts=[]; const tiers=4+(srand()*2|0); let y=0.08, r=0.58+srand()*0.22; const tierH=0.62+srand()*0.22;
+  for(let i=0;i<tiers;i++){ const h=tierH*(1.0-i*0.05), cone=new THREE.ConeGeometry(r,h,8); cone.translate(0,y+h/2,0);
+    // léger bruit pour casser le cône parfait
+    const p=cone.attributes.position, v=new THREE.Vector3(); for(let k=0;k<p.count;k++){ v.fromBufferAttribute(p,k); if(v.y<h*0.45){ const d=1+0.12*Math.sin(v.x*9+v.z*7+i); v.x*=d; v.z*=d; p.setXYZ(k,v.x,v.y,v.z); } }
+    cone.computeVertexNormals(); parts.push(cone); y+=h*0.52; r*=0.74; }
+  const g=mergeGeos(parts); g.computeVertexNormals(); g.computeBoundingBox(); return g; }
+// ===== FEUILLAGE PEINT (textures canvas alpha, façon sprites WC3) =====
+function foliageTex(kind){ foliageTex._c=foliageTex._c||{}; if(foliageTex._c[kind]) return foliageTex._c[kind];
+  const S=384, c=document.createElement('canvas'); c.width=c.height=S; const x=c.getContext('2d'); x.clearRect(0,0,S,S);
+  const R=Math.random;
+  // tampon "grappe de feuilles" : amas de petits cercles -> silhouette dentelée organique
+  const cluster=(cx,cy,spread,n,r0,col)=>{ x.fillStyle=col; for(let i=0;i<n;i++){ const a=R()*6.2832, d=Math.pow(R(),0.7)*spread, px=cx+Math.cos(a)*d, py=cy+Math.sin(a)*d*0.92, r=r0*(0.55+R()*0.7); x.beginPath(); x.arc(px,py,r,0,6.2832); x.fill(); } };
+  if(kind==='broadleaf'){
+    const cx=S*0.5, cy=S*0.36, RAD=S*0.36;
+    // tronc + grosses branches (marron, sous la canopée)
+    x.strokeStyle='#3b2c1c'; x.lineCap='round'; x.lineWidth=18; x.beginPath(); x.moveTo(cx,S*0.99); x.lineTo(cx-4,cy+RAD*0.5); x.stroke();
+    x.lineWidth=9; x.beginPath(); x.moveTo(cx-2,cy+RAD*0.6); x.lineTo(cx-46,cy+RAD*0.1); x.moveTo(cx,cy+RAD*0.55); x.lineTo(cx+50,cy); x.stroke();
+    x.strokeStyle='#241a10'; x.lineWidth=5; x.beginPath(); x.moveTo(cx+3,S*0.95); x.lineTo(cx+1,cy+RAD*0.5); x.stroke();
+    // 1) masse de base sombre (silhouette dentelée)
+    cluster(cx,cy,RAD,120,17,'#16280f');
+    // 2) volume mi-vert
+    for(let i=0;i<14;i++){ const a=R()*6.2832,d=R()*RAD*0.82; cluster(cx+Math.cos(a)*d,cy+Math.sin(a)*d*0.9,RAD*0.34,16,12,'#244018'); }
+    // 3) clairs (lumière haut-gauche)
+    for(let i=0;i<9;i++){ const a=-0.7+R()*1.4,d=R()*RAD*0.72; cluster(cx-RAD*0.22+Math.cos(a)*d,cy-RAD*0.26+Math.sin(a)*d*0.85,RAD*0.24,13,9,'#3a5a26'); }
+    // 4) hautes lumières (reflets feuilles)
+    for(let i=0;i<6;i++){ const a=-0.8+R()*1.1,d=R()*RAD*0.55; cluster(cx-RAD*0.28+Math.cos(a)*d,cy-RAD*0.32+Math.sin(a)*d*0.85,RAD*0.15,9,6,'#52753318'.slice(0,7)); }
+    for(let i=0;i<6;i++){ const a=-0.8+R()*1.1,d=R()*RAD*0.5; cluster(cx-RAD*0.3+Math.cos(a)*d,cy-RAD*0.34+Math.sin(a)*d*0.85,RAD*0.12,7,5,'#5c7d38'); }
+    // 5) ombre basse (profondeur)
+    for(let i=0;i<6;i++){ const a=R()*6.2832,d=RAD*(0.4+R()*0.5); cluster(cx+Math.cos(a)*Math.abs(d)*0.6,cy+RAD*0.4+Math.abs(Math.sin(a))*RAD*0.4,RAD*0.2,10,8,'#0e1d09'); }
+  } else if(kind==='pine'){
+    const cx=S*0.5;
+    x.strokeStyle='#2e2214'; x.lineCap='round'; x.lineWidth=12; x.beginPath(); x.moveTo(cx,S*0.99); x.lineTo(cx,S*0.78); x.stroke();
+    const tiers=6; for(let t=0;t<tiers;t++){ const ty=S*0.1+t*(S*0.115), tw=S*0.07+t*(S*0.062), h=S*0.20;
+      // ombre (base sombre, légèrement plus large à droite)
+      cluster(cx, ty+h*0.6, tw*0.5, 30, tw*0.34, '#12260e');
+      // remplissage en triangle dentelé
+      for(let k=0;k<22;k++){ const f=k/22, px=cx+(R()-0.5)*tw*2*(0.2+f), py=ty+f*h; const r=tw*(0.12+f*0.16)*(0.6+R()*0.6); x.fillStyle=f<0.55?'#1c3614':'#234318'; x.beginPath(); x.arc(px,py,r,0,6.2832); x.fill(); }
+      // reflets clairs (gauche)
+      for(let k=0;k<8;k++){ const f=R(), px=cx-tw*(0.2+f*0.7), py=ty+h*(0.2+f*0.6); x.fillStyle='#3a5a26'; x.beginPath(); x.arc(px,py,tw*0.12,0,6.2832); x.fill(); }
+    }
+    // pointe
+    x.fillStyle='#234318'; x.beginPath(); x.arc(cx,S*0.08,S*0.03,0,6.2832); x.fill();
+  }
+  const tex=new THREE.CanvasTexture(c); if('SRGBColorSpace' in THREE) tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4; foliageTex._c[kind]=tex; return tex; }
+// géométrie "croix" de 2 quads + 1 quad incliné (couvre vues de côté ET vue plongeante) ; origine au pied
+function crossTreeGeo(w,h){ const p1=new THREE.PlaneGeometry(w,h); p1.translate(0,h/2,0);
+  const p2=p1.clone(); p2.rotateY(Math.PI/2);
+  const p3=new THREE.PlaneGeometry(w*0.92,h*0.92); p3.rotateX(-Math.PI/2.3); p3.translate(0,h*0.62,0);   // quad incliné = lisible en vue plongeante
+  return mergeGeos([p1,p2,p3]); }
+function foliageMat(tex){ return new THREE.MeshStandardMaterial({map:tex,alphaTest:0.45,transparent:false,side:THREE.DoubleSide,roughness:1,metalness:0,emissive:new THREE.Color('#0c1808'),emissiveIntensity:0.1,envMapIntensity:0.4}); }
+// touffe d'herbe peinte (brins) — sprite alpha
+function grassTuftTex(){ if(grassTuftTex._t) return grassTuftTex._t; const S=128,c=document.createElement('canvas'); c.width=c.height=S; const x=c.getContext('2d'); x.clearRect(0,0,S,S);
+  const blade=(bx,col,w,lean)=>{ x.strokeStyle=col; x.lineWidth=w; x.lineCap='round'; x.beginPath(); x.moveTo(bx,S-2); x.quadraticCurveTo(bx+lean*0.5,S*0.5,bx+lean,S*0.12); x.stroke(); };
+  for(let i=0;i<16;i++){ const bx=18+Math.random()*92, lean=(Math.random()-0.5)*46; blade(bx, Math.random()<0.5?'#1c3213':'#2a481c', 3+Math.random()*3, lean); }
+  for(let i=0;i<9;i++){ const bx=18+Math.random()*92, lean=(Math.random()-0.5)*42; blade(bx,'#3a5a26',2,lean); }
+  const t=new THREE.CanvasTexture(c); if('SRGBColorSpace' in THREE) t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4; return grassTuftTex._t=t; }
+function tuftCrossGeo(w,h){ const p1=new THREE.PlaneGeometry(w,h); p1.translate(0,h/2,0); const p2=p1.clone(); p2.rotateY(Math.PI/2); return mergeGeos([p1,p2]); }
+// GRAPPE DE FLEURS (touches de couleur dans l'herbe, façon WC3)
+function flowerClumpGeo(){ _seed=5800; const parts=[], n=4+(srand()*4|0);
+  for(let i=0;i<n;i++){ const a=srand()*6.28, rd=srand()*0.17, x=Math.cos(a)*rd, z=Math.sin(a)*rd, y=0.03+srand()*0.06;
+    const head=new THREE.SphereGeometry(0.026+srand()*0.02,6,5); head.scale(1,0.6,1); head.translate(x,y,z); parts.push(head); }
+  return mergeGeos(parts); }
 // écorce procédurale (texture + normal) pour les arbres
 function barkTex(){ if(barkTex._t) return barkTex._t; const s=256,c=document.createElement('canvas'); c.width=c.height=s; const x=c.getContext('2d');
   x.fillStyle='#4e3a28'; x.fillRect(0,0,s,s);
@@ -1239,13 +1366,40 @@ function rockStoneMat(){ if(_rockMatC) return _rockMatC; const m=stonePBR(0.5); 
 function mossStoneMat(){ if(_mossMatC) return _mossMatC; const m=stonePBR(0.5); m.color=new THREE.Color('#566049'); m.roughness=1; m.envMapIntensity=0.55; return _mossMatC=m; }
 function buildSwampFlora(){
   const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),sv=new THREE.Vector3(),pv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
-  // arbres morts torsadés (3 variantes instanciées) — écorce PBR texturée
+  // FORÊT MIXTE style WC3 : feuillus + conifères = SPRITES PEINTS (croix de quads texturés, alphaTest → SSAO-safe) ; arbres morts nus = géométrie gnarled
   const bark=barkPBR();
-  const geos=[deadTreeGeo(0),deadTreeGeo(1),deadTreeGeo(2)], buckets=[[],[],[]];
-  SWAMP_TREES.forEach((p,i)=>buckets[i%3].push(p));
-  buckets.forEach((arr,vi)=>{ if(!arr.length) return; const im=new THREE.InstancedMesh(geos[vi],bark,arr.length); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false;
-    arr.forEach((p,i)=>{ const sc=(p.s||1)*0.62; sv.set(sc,sc*(0.92+(i%7)*0.025),sc); q.setFromAxisAngle(up,p.yaw||0); pv.set(p.x,p.y!=null?p.y:ENV_Y,p.z); m4.compose(pv,q,sv); im.setMatrixAt(i,m4); });
+  const dGeos=[deadTreeGeo(0),deadTreeGeo(1),deadTreeGeo(2)];
+  const bbBroad=crossTreeGeo(3.4,4.4), bbPine=crossTreeGeo(2.7,5.0);
+  const matBroad=foliageMat(foliageTex('broadleaf')), matPine=foliageMat(foliageTex('pine'));
+  const mossVeil=mossVeilGeo(), mossVeilMat=new THREE.MeshStandardMaterial({color:'#74815a',roughness:1,metalness:0,envMapIntensity:0.3});
+  const nearBuildAt=(x,z,rad)=>{ rad=rad||5.8; const R=Math.ceil(Math.sqrt(rad))+1; const cc=Math.floor(x), rr=Math.floor(z); for(let dc=-R;dc<=R;dc++)for(let dr=-R;dr<=R;dr++){ if(cellType(cc+dc,rr+dr)==='build'){ const dx=(cc+dc+0.5)-x, dz=(rr+dr+0.5)-z; if(dx*dx+dz*dz<rad) return true; } } return false; };
+  const deadByVar=[[],[],[]], broadM=[], pineM=[], mossM=[];
+  // classer : près des lanes OU 1/13 = arbre mort nu (lisibilité + variété) ; ~40% conifères ; sinon feuillus
+  SWAMP_TREES.forEach((p,i)=>{ const nb=nearBuildAt(p.x,p.z);
+    if(nb || i%13===0){ deadByVar[i%3].push({p,i}); }
+    else if((i*3)%10>=6){ pineM.push({p,i}); }
+    else { broadM.push({p,i}); if(i%2===0) mossM.push({p,i}); } });
+  // arbres morts nus (géométrie gnarled)
+  deadByVar.forEach((arr,vi)=>{ if(!arr.length) return; const im=new THREE.InstancedMesh(dGeos[vi],bark,arr.length); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false;
+    arr.forEach((o,k)=>{ const p=o.p,i=o.i, sc=(p.s||1)*0.62, syF=(0.92+(i%7)*0.025), baseY=p.y!=null?p.y:ENV_Y; sv.set(sc,sc*syF,sc); q.setFromAxisAngle(up,p.yaw||0); pv.set(p.x,baseY,p.z); m4.compose(pv,q,sv); im.setMatrixAt(k,m4); });
     im.instanceMatrix.needsUpdate=true; scene.add(im); });
+  // feuillus = ARBRES MESHY texturés (treeB) instanciés ; repli sprite peint si pas (encore) chargé
+  if(broadM.length){ const stdRoot=decorTreeCache.treeStd;
+    if(stdRoot){ const rel=new THREE.Matrix4(), fin=new THREE.Matrix4(); stdRoot.updateMatrixWorld(true); const rootInv=stdRoot.matrixWorld.clone().invert();
+      stdRoot.traverse(node=>{ if(!node.isMesh||!node.geometry) return; rel.multiplyMatrices(rootInv,node.matrixWorld);
+        const im=new THREE.InstancedMesh(node.geometry,node.material,broadM.length); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false;
+        broadM.forEach((o,k)=>{ const p=o.p,i=o.i, s=(p.s||1)*(0.72+((i*13)%5)*0.07), baseY=p.y!=null?p.y:ENV_Y; sv.set(s,s,s); q.setFromAxisAngle(up,(p.yaw||0)+i*0.9); pv.set(p.x,baseY,p.z); m4.compose(pv,q,sv); fin.multiplyMatrices(m4,rel); im.setMatrixAt(k,fin); });
+        im.instanceMatrix.needsUpdate=true; scene.add(im); });
+    } else { const im=new THREE.InstancedMesh(bbBroad,matBroad,broadM.length); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;
+      broadM.forEach((o,k)=>{ const p=o.p,i=o.i, s=(p.s||1)*(0.78+((i*13)%5)*0.075), baseY=p.y!=null?p.y:ENV_Y; sv.set(s,s*(0.95+((i*7)%4)*0.06),s); q.setFromAxisAngle(up,(p.yaw||0)+i*0.9); pv.set(p.x,baseY,p.z); m4.compose(pv,q,sv); im.setMatrixAt(k,m4); });
+      im.instanceMatrix.needsUpdate=true; scene.add(im); } }
+  // conifères (sprite peint)
+  if(pineM.length){ const im=new THREE.InstancedMesh(bbPine,matPine,pineM.length); im.castShadow=false; im.receiveShadow=true; im.frustumCulled=false;
+    pineM.forEach((o,k)=>{ const p=o.p,i=o.i, s=(p.s||1)*(0.7+((i*11)%5)*0.07), baseY=p.y!=null?p.y:ENV_Y; sv.set(s,s*(1.0+((i*5)%4)*0.08),s); q.setFromAxisAngle(up,(p.yaw||0)+i*0.9); pv.set(p.x,baseY,p.z); m4.compose(pv,q,sv); im.setMatrixAt(k,m4); });
+    im.instanceMatrix.needsUpdate=true; scene.add(im); }
+  // mousse pendante sous quelques feuillus
+  if(mossM.length){ const im=new THREE.InstancedMesh(mossVeil,mossVeilMat,mossM.length); im.castShadow=false; im.receiveShadow=false; im.frustumCulled=false;
+    mossM.forEach((o,k)=>{ const p=o.p,i=o.i, baseY=p.y!=null?p.y:ENV_Y, s=(p.s||1)*(0.95+(i%3)*0.2); sv.set(s,s,s); q.setFromAxisAngle(up,i*1.3); pv.set(p.x,baseY+2.1,p.z); m4.compose(pv,q,sv); im.setMatrixAt(k,m4); }); im.instanceMatrix.needsUpdate=true; scene.add(im); }
   // rochers procéduraux déformés par bruit (remplacent rock/hill/mtn KayKit primitifs)
   if(SWAMP_ROCKS.length){ _seed=7700; const rockMat=rockStoneMat(), rockMat2=mossStoneMat();
     const rgeo=[rockGeo(0),rockGeo(1),rockGeo(2)], rbk=[[],[],[]]; SWAMP_ROCKS.forEach((p,i)=>rbk[i%3].push(p));
@@ -1253,14 +1407,47 @@ function buildSwampFlora(){
       arr.forEach((p,i)=>{ const b=(p.s||1)*(p.big?1.5:0.55), sx=b*(0.8+srand()*0.5), syy=b*(p.big?(1.0+srand()*0.9):(0.55+srand()*0.4)), sz=b*(0.8+srand()*0.5);
         sv.set(sx,syy,sz); q.setFromAxisAngle(up,p.yaw||0); pv.set(p.x,(p.y!=null?p.y:ENV_Y)+syy*0.28,p.z); m4.compose(pv,q,sv); im.setMatrixAt(i,m4); });
       im.instanceMatrix.needsUpdate=true; scene.add(im); }); }
-  // arbre géant mort = repère "hero"
-  const giant=new THREE.Mesh(deadTreeGeo(7),bark); giant.scale.setScalar(4.6); giant.position.set(COLS/2-30,ENV_Y,ROWS/2-25); giant.castShadow=true; giant.receiveShadow=true; scene.add(giant);
-  // RELIEF : tertres larges et bas pour casser la platitude du sol
+  // arbre géant mort = repère "hero" + sa canopée
+  const giantGeo=deadTreeGeo(7); giantGeo.computeBoundingBox(); const giantS=4.6, giantX=COLS/2-30, giantZ=ROWS/2-25;
+  const giant=new THREE.Mesh(giantGeo,bark); giant.scale.setScalar(giantS); giant.position.set(giantX,ENV_Y,giantZ); giant.castShadow=true; giant.receiveShadow=true; scene.add(giant);
+  // ARBRES HÉROS (treeA nettoyé dans Blender : dalle retirée, 68k tris) : grands exemplaires repères, à l'écart des lanes
+  if(decorTreeCache.treeBig){ _seed=8200; let n=0,tr=0;
+    while(n<6 && tr<900){ tr++; const ang=srand()*6.28, dist=22+srand()*26, x=COLS/2+Math.cos(ang)*dist, z=ROWS/2+Math.sin(ang)*dist; if(cellType(Math.floor(x),Math.floor(z))!=='void') continue; if(Math.hypot(x-COLS/2,z-ROWS/2)<19) continue; if(nearBuildAt(x,z,42)) continue;
+      const cl=decorTreeCache.treeBig.clone(true); const s=0.85+srand()*0.5; cl.scale.multiplyScalar(s); cl.position.set(x,ENV_Y,z); cl.rotation.y=srand()*6.28; cl.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } }); scene.add(cl); n++; } }
+  // HERBE HAUTE : touffes peintes (sprites alpha) dispersées en void → tapis herbeux dense façon WC3
+  { _seed=8600; const gGeo=tuftCrossGeo(0.7,0.62), gMat=foliageMat(grassTuftTex()); const N=900, gi=new THREE.InstancedMesh(gGeo,gMat,N); gi.castShadow=false; gi.receiveShadow=true; gi.frustumCulled=false;
+    let n=0,tr=0; while(n<N && tr<N*7){ tr++; const x=COLS/2+(srand()*104-52), z=ROWS/2+(srand()*96-48), c=Math.floor(x), r=Math.floor(z); if(cellType(c,r)!=='void') continue; const d=Math.hypot(x-COLS/2,z-ROWS/2); if(d<11||d>54) continue;
+      const s=0.7+srand()*0.9; sv.set(s,s*(0.8+srand()*0.6),s); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,ENV_Y,z); m4.compose(pv,q,sv); gi.setMatrixAt(n++,m4); }
+    gi.count=n; gi.instanceMatrix.needsUpdate=true; scene.add(gi); }
+  // RELIEF : tertres larges et bas pour casser la platitude du sol (densité ++)
   { _seed=9100; const moundMat=grassPBR(0.9); moundMat.color=new THREE.Color('#79904e'); moundMat.envMapIntensity=0.95; moundMat.emissive=new THREE.Color('#1c2814'); moundMat.emissiveIntensity=0.18;
-    const mg=[rockGeo(5),rockGeo(6)], mi=[new THREE.InstancedMesh(mg[0],moundMat,16),new THREE.InstancedMesh(mg[1],moundMat,16)], cnt=[0,0];
-    let n=0,tr=0; while(n<28 && tr<600){ tr++; const ang=srand()*6.28, dist=17+srand()*32, x=COLS/2+Math.cos(ang)*dist, z=ROWS/2+Math.sin(ang)*dist; if(cellType(Math.floor(x),Math.floor(z))!=='void') continue;
-      const vi=n%2, w=4.5+srand()*6.5, h=0.6+srand()*1.1; sv.set(w,h,w*(0.75+srand()*0.5)); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,ENV_Y-0.25,z); m4.compose(pv,q,sv); mi[vi].setMatrixAt(cnt[vi]++,m4); n++; }
+    const mg=[rockGeo(5),rockGeo(6)], mi=[new THREE.InstancedMesh(mg[0],moundMat,30),new THREE.InstancedMesh(mg[1],moundMat,30)], cnt=[0,0];
+    let n=0,tr=0; while(n<44 && tr<900){ tr++; const ang=srand()*6.28, dist=16+srand()*38, x=COLS/2+Math.cos(ang)*dist, z=ROWS/2+Math.sin(ang)*dist; if(cellType(Math.floor(x),Math.floor(z))!=='void') continue;
+      const vi=n%2, w=4.0+srand()*8.0, h=0.5+srand()*1.5; sv.set(w,h,w*(0.7+srand()*0.6)); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,ENV_Y-0.25,z); m4.compose(pv,q,sv); mi[vi].setMatrixAt(cnt[vi]++,m4); n++; }
     mi.forEach((m,i)=>{ m.count=cnt[i]; m.receiveShadow=true; m.castShadow=true; m.frustumCulled=false; m.instanceMatrix.needsUpdate=true; scene.add(m); }); }
+  // CRÊTE LOINTAINE : collines sombres qui ceinturent la scène, fondues dans la brume → profondeur + ambiance de bassin marécageux
+  { _seed=9500; const ridgeMat=new THREE.MeshStandardMaterial({color:'#222c1a',roughness:1,metalness:0,envMapIntensity:0.25});
+    const rg=[rockGeo(11),rockGeo(12)], N=15, ri=[new THREE.InstancedMesh(rg[0],ridgeMat,N),new THREE.InstancedMesh(rg[1],ridgeMat,N)], cn=[0,0];
+    for(let i=0;i<N*2;i++){ const ang=i/(N*2)*6.28+srand()*0.12, dist=56+srand()*30, x=COLS/2+Math.cos(ang)*dist, z=ROWS/2+Math.sin(ang)*dist;
+      const vi=i%2, w=11+srand()*16, h=5+srand()*10; sv.set(w,h,w*(0.8+srand()*0.5)); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,ENV_Y-2.0,z); m4.compose(pv,q,sv); ri[vi].setMatrixAt(cn[vi]++,m4); }
+    ri.forEach((m,i)=>{ m.count=cn[i]; m.receiveShadow=false; m.castShadow=false; m.frustumCulled=false; m.instanceMatrix.needsUpdate=true; scene.add(m); }); }
+  // FALAISES / AFFLEUREMENTS ROCHEUX (relief façon WC3) : blocs gris en grappes, hauteurs variées → vrais accidents de terrain
+  { _seed=9800; const cliffMat=stonePBR(0.6); cliffMat.color=new THREE.Color('#6f6a5c'); cliffMat.roughness=1; cliffMat.envMapIntensity=0.5;
+    const mossCliff=stonePBR(0.6); mossCliff.color=new THREE.Color('#5a6347'); mossCliff.roughness=1; mossCliff.envMapIntensity=0.45;
+    const cg=[rockGeo(13),rockGeo(14),rockGeo(15)], ci=[new THREE.InstancedMesh(cg[0],cliffMat,60),new THREE.InstancedMesh(cg[1],cliffMat,60),new THREE.InstancedMesh(cg[2],mossCliff,60)], cc=[0,0,0];
+    let clusters=0,tries=0; while(clusters<10 && tries<400){ tries++; const ang=srand()*6.28, dist=18+srand()*34, cx=COLS/2+Math.cos(ang)*dist, cz=ROWS/2+Math.sin(ang)*dist; if(cellType(Math.floor(cx),Math.floor(cz))!=='void') continue;
+      const nRock=3+(srand()*4|0); for(let j=0;j<nRock && (cc[0]+cc[1]+cc[2])<175;j++){ const ox=(srand()-0.5)*4.5, oz=(srand()-0.5)*4.5, x=cx+ox, z=cz+oz; if(cellType(Math.floor(x),Math.floor(z))!=='void') continue;
+        const tall=srand()<0.4, w=tall?(1.4+srand()*1.8):(0.9+srand()*1.6), h=tall?(2.2+srand()*2.6):(0.6+srand()*1.2), vi=(cc[0]+cc[1]+cc[2])%3;
+        sv.set(w,h,w*(0.8+srand()*0.5)); q.setFromEuler(new THREE.Euler((srand()-0.5)*0.18,srand()*6.28,(srand()-0.5)*0.18)); pv.set(x,ENV_Y+h*0.30-0.2,z); m4.compose(pv,q,sv); ci[vi].setMatrixAt(cc[vi]++,m4); }
+      clusters++; }
+    ci.forEach((m,i)=>{ m.count=cc[i]; m.castShadow=true; m.receiveShadow=true; m.frustumCulled=false; m.instanceMatrix.needsUpdate=true; scene.add(m); }); }
+  // FLEURS : petites grappes jaunes dispersées dans l'herbe en void (vie + couleur, façon WC3)
+  { _seed=9850; const fGeo=flowerClumpGeo(), fMat=new THREE.MeshStandardMaterial({color:'#d8c247',roughness:0.7,metalness:0,emissive:'#544710',emissiveIntensity:0.45});
+    const fMat2=new THREE.MeshStandardMaterial({color:'#c9d0d6',roughness:0.7,metalness:0,emissive:'#3a4048',emissiveIntensity:0.3});
+    const N=150, fi=[new THREE.InstancedMesh(fGeo,fMat,N),new THREE.InstancedMesh(fGeo,fMat2,Math.floor(N/3))], fc=[0,0];
+    let n=0,tr=0; while(n<N+Math.floor(N/3) && tr<N*8){ tr++; const x=COLS/2+(srand()*100-50), z=ROWS/2+(srand()*92-46), c=Math.floor(x), r=Math.floor(z); if(cellType(c,r)!=='void') continue; const d=Math.hypot(x-COLS/2,z-ROWS/2); if(d<12||d>52) continue;
+      const wh=n%4===0?1:0, sc=0.8+srand()*1.0; sv.set(sc,sc,sc); q.setFromAxisAngle(up,srand()*6.28); pv.set(x,ENV_Y+0.02,z); m4.compose(pv,q,sv); if(fc[wh]<fi[wh].count){ fi[wh].setMatrixAt(fc[wh]++,m4); n++; } }
+    fi.forEach((m,i)=>{ m.count=fc[i]; m.frustumCulled=false; m.instanceMatrix.needsUpdate=true; scene.add(m); }); }
   // RUINES : colonnes brisées (identité WC3) éparpillées autour du trident
   { _seed=9300; const colMat=stonePBR(0.4); colMat.color=new THREE.Color('#7c766a'); colMat.roughness=1; colMat.envMapIntensity=0.6;
     function colGeo(v){ const parts=[], h=1.3+(v%3)*0.55; const sh=new THREE.CylinderGeometry(0.25,0.32,h,10); sh.translate(0,h/2+0.18,0); parts.push(sh);
@@ -1858,7 +2045,7 @@ function refreshUI(){
   }
 }
 function updateNextPreview(){ const w=Math.min(40,waveIndex+(waveActive?0:1)); if(w>40){ $('next').textContent='—'; return; }
-  const s=waveSpec(w), names={sheep:'Moutons maudits',direwolf:'Loups affamés',peasant:'Villageois maudits',orc:'Orcs guerriers',grunt:'Fantassins orcs',raider:'Loups',golem:'Golems de pierre',gargoyle:'Gargouilles',imp:'Diablotins',ogre:'Ogres',boss:'BOSS'};
+  const s=waveSpec(w), names={sheep:'Moutons maudits',direwolf:'Loups affamés',peasant:'Villageois maudits',orc:'Orcs guerriers',grunt:'Fantassins orcs',raider:'Loups',golem:'Golems de pierre',gargoyle:'Gargouilles',troll:'Trolls',imp:'Diablotins',ogre:'Ogres',boss:'BOSS'};
   $('next').innerHTML='Vague '+w+' — <b style="color:'+s.col+'">'+names[s.type]+'</b><br>'+s.count+' unité(s) · '+s.hp+' PV '+(s.armor?'· '+s.armor+' armure':'')+'<br>'+s.gold+' or/kill '+(s.fly?'· <b style="color:#b26bff">VOLANT</b>':''); }
 
 /* ============ INPUT clavier ============ */
@@ -1960,6 +2147,24 @@ const AUDIO={ ctx:null, master:null, musicGain:null, on:true, _lc:0, musicVol:0.
     if(shape==='direwolf'||shape==='wolf'){ if(this.wolfBuf){ const src=ctx.createBufferSource(); src.buffer=this.wolfBuf; src.playbackRate.value=1.04+Math.random()*0.14; // léger pitch-up = jappement de mort
         const g=ctx.createGain(); g.gain.value=0.35; const f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=140;
         src.connect(f); f.connect(g); g.connect(this.master); try{ src.start(t); }catch(e){} } return; }
+    // — gargouille (créature de pierre volante) : cri strident métallique/pierre qui descend —
+    if(shape==='gargoyle'){ const o=ctx.createOscillator(),o2=ctx.createOscillator(),g=ctx.createGain(),f=ctx.createBiquadFilter();
+      o.type='sawtooth'; o2.type='square'; o2.detune.value=35; f.type='bandpass'; f.frequency.value=1900; f.Q.value=2.6;
+      o.frequency.setValueAtTime(1550,t); o.frequency.exponentialRampToValueAtTime(430,t+0.36);
+      o2.frequency.setValueAtTime(1550,t); o2.frequency.exponentialRampToValueAtTime(430,t+0.36);
+      o.connect(f); o2.connect(f); f.connect(g); g.connect(this.master);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.26,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.44);
+      o.start(t); o2.start(t); o.stop(t+0.46); o2.stop(t+0.46);
+      this.noise(0.2,2800,0.06,'highpass'); return; }   // grattement de pierre
+    // — troll : rugissement grave et guttural (grognement réel très bas + sub-rumble) —
+    if(shape==='troll'){
+      if(this.deathBuf && this.deathSegs && this.deathSegs.length){ const s=this.deathSegs[(Math.random()*this.deathSegs.length)|0];
+        const src=ctx.createBufferSource(); src.buffer=this.deathBuf; src.playbackRate.value=0.4+Math.random()*0.06;
+        const g=ctx.createGain(); g.gain.value=0.5; const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=680;
+        src.connect(f); f.connect(g); g.connect(this.master); try{ src.start(t,s.off,Math.min(s.dur,1.4)); }catch(e){} }
+      const o=ctx.createOscillator(),g2=ctx.createGain(); o.type='sine'; o.frequency.setValueAtTime(82,t); o.frequency.exponentialRampToValueAtTime(46,t+0.5);
+      o.connect(g2); g2.connect(this.master); g2.gain.setValueAtTime(0.0001,t); g2.gain.exponentialRampToValueAtTime(0.42,t+0.05); g2.gain.exponentialRampToValueAtTime(0.0001,t+0.62);
+      o.start(t); o.stop(t+0.64); return; }
     // — paysan / orc : grognement humain enregistré, à hauteur & filtrage adaptés —
     if(this.deathBuf && this.deathSegs && this.deathSegs.length){ const s=this.deathSegs[(Math.random()*this.deathSegs.length)|0];
       const src=ctx.createBufferSource(); src.buffer=this.deathBuf; let rate,vol,fc;
@@ -2167,7 +2372,7 @@ $('bBack').onclick=()=>{ try{ if(NET.peer) NET.peer.destroy(); }catch(e){} NET={
 function hideLoader(){ if(assetsReady) return; assetsReady=true; if(_loaderPoll) clearInterval(_loaderPoll);
   const el=document.getElementById('loader'); if(el){ el.style.opacity='0'; setTimeout(()=>{ el.style.display='none'; },650); }
   if(_pendingStart){ _pendingStart=false; resetGame(); } }
-function assetsAllLoaded(){ try{ return Object.keys(ENV).every(k=>envCache[k]) && Object.keys(MODELS).every(k=>gltfCache[k]) && Object.keys(GEN_TOWER).every(k=>genCache[k]); }catch(e){ return false; } }
+function assetsAllLoaded(){ try{ return Object.keys(ENV).every(k=>envCache[k]) && Object.keys(MODELS).every(k=>gltfCache[k]) && Object.keys(GEN_TOWER).every(k=>genCache[k]) && DECOR_TREES.every(t=>decorTreeCache[t[0]]) && !!decorTreeCache.castleM; }catch(e){ return false; } }
 let _loaderPoll=setInterval(()=>{ if(assetsReady){ clearInterval(_loaderPoll); return; }
   const ek=Object.keys(ENV), mk=Object.keys(MODELS);
   const e=ek.filter(k=>envCache[k]).length, m=mk.filter(k=>gltfCache[k]).length;
