@@ -183,6 +183,12 @@
         <div id="lobbyMenu" style="display:flex;flex-direction:column;gap:10px;align-items:center">
           <input id="pseudo" placeholder="Ton pseudo" maxlength="14" autocomplete="off"
             style="width:248px;background:#10141c;border:1px solid #3a2f1c;color:#ecdfc4;border-radius:8px;padding:9px;font:600 14px Georgia,serif;text-align:center">
+          <div style="display:flex;gap:7px;align-items:center;font:600 13px Georgia,serif;color:#cdbf9c">Pointes actives :
+            <button class="btn laneBtn" data-lanes="1" style="min-width:34px;padding:6px 10px">1</button>
+            <button class="btn laneBtn" data-lanes="2" style="min-width:34px;padding:6px 10px">2</button>
+            <button class="btn primary laneBtn" data-lanes="3" style="min-width:34px;padding:6px 10px">3</button>
+          </div>
+          <div style="font:11px Georgia,serif;color:#8a8170;max-width:262px;text-align:center;opacity:.82;line-height:1.4">Moins de pointes = moins d'ennemis. Choisis selon le nombre de joueurs (le centre reste toujours actif).</div>
           <button class="btn primary" id="bSolo" style="min-width:260px">Jouer en local (même écran)</button>
           <button class="btn" id="bHost" style="min-width:260px">Héberger une partie en ligne</button>
           <div style="display:flex;gap:6px"><input id="joinCode" placeholder="CODE" maxlength="6"
@@ -309,6 +315,10 @@ function cellType(c,r){
 const SPAWNS=[{c:7,r:1},{c:27,r:1},{c:46,r:1}], GOAL={c:27,r:43};
 const EXTRA_SPAWNS=[{c:4,r:20},{c:49,r:20}];   // extrémités gauche/droite de la barre, centrées en hauteur (entrée bien droite)
 const ALL_SPAWNS=SPAWNS.concat(EXTRA_SPAWNS);
+// nombre de pointes actives (1..3) — choisi au lobby pour jouer à moins de 4.
+// 1 -> pointe centrale ; 2 -> gauche+droite ; 3 -> toutes. Le centre (barre) reste toujours actif.
+let laneCount=3;
+function activeProngIdx(){ return laneCount===1?[1]:laneCount===2?[0,2]:[0,1,2]; }
 const spawnKeys=new Set(ALL_SPAWNS.map(s=>s.r*COLS+s.c));
 const key=(c,r)=>r*COLS+c;
 const t0=performance.now(); const T=()=>(performance.now()-t0)/1000;
@@ -454,13 +464,17 @@ function startWave(){
   if(waveActive||gameOver||won||waveIndex>=40) return;
   nextWaveTimer=0;   // annule le compte à rebours auto (lancement immédiat)
   waveIndex++; const spec=waveSpec(waveIndex); spawnQueue=[];
-  // chaque spawn extra envoie ~40% des unités d'UN spawn normal (count/3)
+  // seules les pointes actives spawnent ; le total descend avec le nb de pointes (jouable à moins de 4)
+  const activeSpawns=activeProngIdx().map(i=>SPAWNS[i]);
+  const perProng=spec.count/3;                                   // garde l'intensité par pointe
+  const prongTotal=Math.max(activeSpawns.length, Math.round(perProng*activeSpawns.length));
+  // chaque spawn extra (barre) envoie ~40% des unités d'UNE pointe ; le centre reste toujours actif
   const extraN=Math.round(spec.count*0.40/3);
-  const extraTotal=extraN*EXTRA_SPAWNS.length, total=spec.count+extraTotal;
-  let pe=0; // extras placés (répartis uniformément dans la vague)
+  const extraTotal=extraN*EXTRA_SPAWNS.length, total=prongTotal+extraTotal;
+  let pe=0, pp=0; // extras / pointes placés (répartis uniformément dans la vague)
   for(let i=0;i<total;i++){
     if(extraTotal>0 && Math.floor((i+1)*extraTotal/total)>pe){ spawnQueue.push({spec, spawn:EXTRA_SPAWNS[pe%EXTRA_SPAWNS.length]}); pe++; }
-    else spawnQueue.push({spec, spawn:SPAWNS[(i-pe)%SPAWNS.length]});
+    else { spawnQueue.push({spec, spawn:activeSpawns[pp%activeSpawns.length]}); pp++; }
   }
   spawnTimer=0; spawnInterval=spec.type==='imp'?0.16:spec.type==='raider'?0.22:spec.type==='boss'?0.6:spec.type==='golem'?0.7:spec.type==='ogre'?0.85:0.4;  // tanks (golem/ogre) spawn plus lentement
   waveActive=true; paused=false; AUDIO.wave(); updateNextPreview();
@@ -2357,6 +2371,7 @@ document.getElementById('board').appendChild(scoreEl);
 
 // ---- lobby / pré-menu ----
 if($('pseudo')){ if(myPseudo) $('pseudo').value=myPseudo; $('pseudo').addEventListener('input',e=>setMyName(e.target.value)); }
+document.querySelectorAll('.laneBtn').forEach(b=>b.onclick=()=>{ laneCount=+b.dataset.lanes; document.querySelectorAll('.laneBtn').forEach(x=>x.classList.toggle('primary',x===b)); });
 $('bSolo').onclick=()=>{ AUDIO.init(); AUDIO.resume(); enterFS(); NET={mode:'local',slot:0}; if(myPseudo) PLAYERS[0].name=myPseudo; $('lobby').style.display='none'; setPlayer(0); resetGame(); setTimeout(updateFSGate,700); };
 $('bHost').onclick=()=>{ AUDIO.init(); AUDIO.resume(); hostGame(); };
 $('bJoin').onclick=()=>{ AUDIO.init(); AUDIO.resume(); joinGame($('joinCode').value); };
